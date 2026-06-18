@@ -1,6 +1,6 @@
 # Woo Legal Returns – EU Directive
 
-Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE)** e al D.Lgs. 21/2014 (recepimento italiano).
+Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673)** e al D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).
 
 ## Funzionalità
 
@@ -38,7 +38,8 @@ woo-legal/
 │   ├── class-wlr-post-type.php         # CPT + CRUD richieste di reso
 │   ├── class-wlr-customer-account.php  # Tab My Account + AJAX
 │   ├── class-wlr-emails.php            # Notifiche email
-│   └── class-wlr-admin.php             # Dashboard admin
+│   ├── class-wlr-admin.php             # Dashboard admin
+│   └── class-wlr-github-updater.php    # Aggiornamenti automatici da GitHub
 ├── templates/
 │   ├── myaccount/
 │   │   ├── returns.php                 # Elenco resi cliente
@@ -75,6 +76,7 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 
 ## Conformità normativa
 
-- **Art. 52 D.Lgs. 206/2005** (Codice del Consumo) – diritto di recesso 14 giorni
-- **Allegato I Direttiva 2011/83/UE** – modulo di recesso tipo
-- **Art. 56** – rimborso entro 14 giorni dalla ricezione della comunicazione di recesso
+- **Direttiva UE 2011/83/UE come modificata dalla Direttiva 2023/2673** – funzione digitale di recesso (Art. 54-bis)
+- **D.Lgs. 209/2025 (art. 54-bis Codice del Consumo)** – recepimento italiano: conferma immediata, doppia conferma, testo completo dichiarazione
+- **Finestra 14 giorni** – diritto di recesso senza motivazione dalla ricezione dei beni
+- **Rimborso entro 14 giorni** – dalla ricezione della merce restituita

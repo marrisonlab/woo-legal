@@ -82,7 +82,7 @@ class WLR_Customer_Account {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'wlr_submit_return' ),
 				'i18n'    => [
-					'confirmSubmit'  => __( 'Sei sicuro di voler inviare la richiesta di recesso? L\\'operazione non \u00e8 reversibile.', 'woo-legal-returns' ),
+					'confirmSubmit'  => __( 'Conferma invio: la richiesta di recesso non potra essere annullata. Procedere?', 'woo-legal-returns' ),
 					'selectOrder'    => __( 'Seleziona un ordine per vedere i prodotti disponibili.', 'woo-legal-returns' ),
 					'submitBtn'      => __( 'Invia richiesta di recesso', 'woo-legal-returns' ),
 					'submitting'     => __( 'Invio in corso…', 'woo-legal-returns' ),
