@@ -34,7 +34,7 @@ do_action( 'woocommerce_email_header', __( 'Nuova richiesta di reso', 'woo-legal
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th>
-		<td style="border:1px solid #e5e5e5;"><?php echo esc_html( $reason ); ?></td>
+		<td style="border:1px solid #e5e5e5;"><?php echo esc_html( $reason_label ); ?></td>
 	</tr>
 	<?php if ( $notes ) : ?>
 	<tr>

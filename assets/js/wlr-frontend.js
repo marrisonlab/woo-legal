@@ -12,7 +12,7 @@
 		if ( ! orderId ) {
 			$container.html(
 				'<p class="wlr-items-placeholder"><em>' +
-				wlrData.i18n.confirmSubmit +
+				wlrData.i18n.selectOrder +
 				'</em></p>'
 			);
 			return;
@@ -109,10 +109,11 @@
 				notes       : $( '#wlr_notes' ).val(),
 				items       : JSON.stringify( collectItems() ),
 				order_key   : $( '#wlr_order_key' ).val() || '',
-				guest_email : $( '#wlr_guest_email' ).val() || '',
+				guest_email        : $( '#wlr_guest_email' ).val() || '',
+				confirm_withdrawal : $( '[name="confirm_withdrawal"]' ).is( ':checked' ) ? '1' : '',
 			},
 			function ( response ) {
-				$btn.prop( 'disabled', false ).text( 'Invia richiesta di recesso' );
+				$btn.prop( 'disabled', false ).text( wlrData.i18n.submitBtn );
 
 				if ( response.success ) {
 					$msg.addClass( 'success' ).text( response.data.message ).show();
@@ -124,7 +125,7 @@
 				}
 			}
 		).fail( function () {
-			$btn.prop( 'disabled', false ).text( 'Invia richiesta di recesso' );
+			$btn.prop( 'disabled', false ).text( wlrData.i18n.submitBtn );
 			$msg.addClass( 'error' ).text( wlrData.i18n.errorGeneric ).show();
 		} );
 	} );

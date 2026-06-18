@@ -39,7 +39,7 @@ do_action( 'woocommerce_email_header', __( 'Richiesta di reso ricevuta', 'woo-le
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th>
-		<td style="border:1px solid #e5e5e5;"><?php echo esc_html( $reason ); ?></td>
+		<td style="border:1px solid #e5e5e5;"><?php echo esc_html( $reason_label ); ?></td>
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Data richiesta', 'woo-legal-returns' ); ?></th>
@@ -88,7 +88,7 @@ do_action( 'woocommerce_email_header', __( 'Richiesta di reso ricevuta', 'woo-le
 	<table style="width:100%;border-collapse:collapse;font-size:13px;">
 		<tr>
 			<td style="padding:4px 8px 4px 0;color:#555;width:50%;"><strong><?php esc_html_e( 'Motivo dichiarato:', 'woo-legal-returns' ); ?></strong></td>
-			<td style="padding:4px 0;"><?php echo esc_html( $reason ); ?></td>
+			<td style="padding:4px 0;"><?php echo esc_html( $reason_label ); ?></td>
 		</tr>
 		<tr>
 			<td style="padding:4px 8px 4px 0;color:#555;"><strong><?php esc_html_e( 'Data e ora di trasmissione:', 'woo-legal-returns' ); ?></strong></td>

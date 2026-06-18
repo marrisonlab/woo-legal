@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * Integrazione nell'area "Il mio account" di WooCommerce.
  *
@@ -82,7 +82,9 @@ class WLR_Customer_Account {
 				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
 				'nonce'   => wp_create_nonce( 'wlr_submit_return' ),
 				'i18n'    => [
-					'confirmSubmit'  => __( 'Sei sicuro di voler inviare la richiesta di reso?', 'woo-legal-returns' ),
+					'confirmSubmit'  => __( 'Sei sicuro di voler inviare la richiesta di recesso? L\\'operazione non \u00e8 reversibile.', 'woo-legal-returns' ),
+					'selectOrder'    => __( 'Seleziona un ordine per vedere i prodotti disponibili.', 'woo-legal-returns' ),
+					'submitBtn'      => __( 'Invia richiesta di recesso', 'woo-legal-returns' ),
 					'submitting'     => __( 'Invio in corso…', 'woo-legal-returns' ),
 					'errorGeneric'   => __( 'Si è verificato un errore. Riprova.', 'woo-legal-returns' ),
 				],
@@ -232,6 +234,10 @@ class WLR_Customer_Account {
 
 		if ( ! $order_id || ! $reason ) {
 			wp_send_json_error( [ 'message' => __( 'Compila tutti i campi obbligatori.', 'woo-legal-returns' ) ] );
+		}
+
+		if ( empty( $_POST['confirm_withdrawal'] ) ) {
+			wp_send_json_error( [ 'message' => __( 'È necessario confermare la dichiarazione di recesso per procedere.', 'woo-legal-returns' ) ] );
 		}
 
 		if ( is_user_logged_in() ) {

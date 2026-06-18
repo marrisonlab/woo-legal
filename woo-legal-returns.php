@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       Woo Legal Returns – EU Directive
- * Plugin URI:        https://github.com/Angelo/woo-legal
+ * Plugin URI:        https://github.com/marrisonlab/woo-legal
  * Description:       Adegua WooCommerce alla Direttiva UE sui Diritti dei Consumatori: modulo di recesso standardizzato, gestione richieste di reso nell'area cliente, notifiche email e dashboard admin.
  * Version:           1.0.0
  * Author:            Angelo
@@ -16,11 +16,12 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WLR_VERSION',     '1.0.0' );
-define( 'WLR_PLUGIN_FILE', __FILE__ );
-define( 'WLR_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
-define( 'WLR_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
-define( 'WLR_RETURN_DAYS', 14 ); // Diritto di recesso: 14 giorni
+define( 'WLR_VERSION',          '1.0.0' );
+define( 'WLR_PLUGIN_FILE',      __FILE__ );
+define( 'WLR_PLUGIN_BASENAME',  plugin_basename( __FILE__ ) );
+define( 'WLR_PLUGIN_DIR',       plugin_dir_path( __FILE__ ) );
+define( 'WLR_PLUGIN_URL',       plugin_dir_url( __FILE__ ) );
+define( 'WLR_RETURN_DAYS',      14 ); // Diritto di recesso: 14 giorni
 
 /**
  * Verifica dipendenze prima di caricare il plugin.
@@ -60,6 +61,14 @@ function wlr_init(): void {
 	WLR_Admin::instance();
 }
 add_action( 'plugins_loaded', 'wlr_init' );
+
+/**
+ * Aggiornamenti automatici da GitHub (non richiede WooCommerce).
+ * I filtri vengono registrati subito, prima di qualsiasi hook,
+ * per intercettare correttamente i controlli aggiornamenti via cron.
+ */
+require_once plugin_dir_path( __FILE__ ) . 'includes/class-wlr-github-updater.php';
+( new WLR_GitHub_Updater() )->hooks();
 
 /**
  * Attivazione: crea tabella personalizzata e flush rewrite rules.

@@ -77,7 +77,9 @@ $total_pages = ceil( $total / $per_page );
 				<?php foreach ( $posts as $post ) :
 					$order_id    = (int) get_post_meta( $post->ID, '_wlr_order_id', true );
 					$customer_id = (int) get_post_meta( $post->ID, '_wlr_customer_id', true );
-					$reason      = get_post_meta( $post->ID, '_wlr_reason', true );
+					$reason_key  = get_post_meta( $post->ID, '_wlr_reason', true );
+					$_reasons    = WLR_Customer_Account::instance()->get_return_reasons();
+					$reason      = $_reasons[ $reason_key ] ?? $reason_key;
 					$created_at  = get_post_meta( $post->ID, '_wlr_created_at', true );
 					$order       = wc_get_order( $order_id );
 					$customer    = get_userdata( $customer_id );

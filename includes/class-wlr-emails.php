@@ -26,9 +26,6 @@ class WLR_Emails {
 		add_action( 'wlr_return_created',        [ $this, 'on_return_created' ], 10, 3 );
 		add_action( 'wlr_return_status_changed', [ $this, 'on_status_changed' ], 10, 3 );
 
-		// Dopo che l'admin aggiorna lo stato, emetti l'action per le email.
-		add_action( 'save_post_wlr_return', [ $this, 'maybe_trigger_status_email' ], 20, 3 );
-
 		// Link di recesso nelle email ordine WooCommerce.
 		// Hook 1: dopo la tabella ordine (posizione ideale, dipende dalla template).
 		add_action( 'woocommerce_email_after_order_table', [ $this, 'add_withdrawal_link_to_order_email' ], 10, 4 );
@@ -57,11 +54,15 @@ class WLR_Emails {
 	 */
 	public function on_status_changed( int $return_id, string $new_status, string $old_status ): void {
 		$this->send_customer_status_update( $return_id, $new_status );
-		$this->maybe_update_wc_order_status( $return_id, $new_status );
+		try {
+			$this->maybe_update_wc_order_status( $return_id, $new_status );
+		} catch ( \Throwable $e ) {
+			error_log( '[WLR] Errore update ordine WC: ' . $e->getMessage() );
+		}
 	}
 
 	/**
-	 * Bug 5: aggiorna automaticamente lo stato dell'ordine WooCommerce.
+	 * Aggiorna automaticamente lo stato dell'ordine WooCommerce.
 	 * - reso approvato → ordine in sospeso
 	 * - reso rimborsato → ordine rimborsato
 	 *
@@ -95,9 +96,7 @@ class WLR_Emails {
 	 * Dipende dalla template WC – potrebbe non girare se sovrascritta dal tema.
 	 */
 	public function add_withdrawal_link_to_order_email( $order, $sent_to_admin, $plain_text, $email ): void {
-		$email_id  = $email->id ?? 'N/A';
-		$order_id  = ( $order instanceof \WC_Order ) ? $order->get_id() : 'non-WC_Order';
-		error_log( "[WLR-DEBUG] after_order_table → email_id={$email_id} order_id={$order_id} admin={$sent_to_admin} plain={$plain_text}" );
+		$email_id = $email->id ?? '';
 
 		if ( $sent_to_admin || $plain_text ) {
 			return;
@@ -109,19 +108,13 @@ class WLR_Emails {
 
 		$allowed = [ 'customer_processing_order', 'customer_completed_order' ];
 		if ( ! in_array( $email_id, $allowed, true ) ) {
-			error_log( "[WLR-DEBUG] after_order_table → email_id={$email_id} NON in allowed list, skip" );
 			return;
 		}
-
-		$within  = WLR_Post_Type::is_within_return_window( $order ) ? 'YES' : 'NO';
-		$has_ret = WLR_Post_Type::get_return_by_order( $order->get_id() ) ? 'YES' : 'NO';
-		error_log( "[WLR-DEBUG] after_order_table → within_window={$within} has_return={$has_ret}" );
 
 		if ( ! $this->should_show_withdrawal_link( $order ) ) {
 			return;
 		}
 
-		error_log( '[WLR-DEBUG] after_order_table → PRINTING link' );
 		$this->output_withdrawal_link( $order );
 		$this->link_printed_key = $email_id . '::' . $order->get_id();
 	}
@@ -131,9 +124,6 @@ class WLR_Emails {
 	 * Chiesto da WC_Email::get_footer() → sempre disponibile indipendentemente dal tema.
 	 */
 	public function add_withdrawal_link_to_email_footer( $email ): void {
-		$email_id = is_object( $email ) ? ( $email->id ?? 'no-id' ) : 'not-object';
-		error_log( "[WLR-DEBUG] email_footer fired → email_id={$email_id}" );
-
 		// Recupera l'ordine dal contesto dell'email.
 		if ( ! is_object( $email ) || ! isset( $email->id ) ) {
 			$this->link_printed_key = '';
@@ -142,7 +132,6 @@ class WLR_Emails {
 
 		$allowed = [ 'customer_processing_order', 'customer_completed_order' ];
 		if ( ! in_array( $email->id, $allowed, true ) ) {
-			error_log( "[WLR-DEBUG] email_footer → email_id={$email_id} NON in allowed list" );
 			return;
 		}
 
@@ -204,41 +193,19 @@ class WLR_Emails {
 			esc_html__( 'Diritto di recesso:', 'woo-legal-returns' ),
 			esc_html__( 'Hai 14 giorni dalla ricezione per recedere dal contratto.', 'woo-legal-returns' ),
 			esc_url( $return_url ),
-			esc_html__( 'Apri richiesta di reso →', 'woo-legal-returns' )
+			esc_html__( 'Recedere dal contratto qui', 'woo-legal-returns' )
 		);
-	}
-
-	/**
-	 * Intercetta save_post per rilevare cambiamenti di stato.
-	 *
-	 * @param int      $post_id
-	 * @param \WP_Post $post
-	 * @param bool     $update
-	 */
-	public function maybe_trigger_status_email( int $post_id, \WP_Post $post, bool $update ): void {
-		if ( ! $update ) {
-			return;
-		}
-		$old_status = get_post_meta( $post_id, '_wlr_prev_status', true );
-		if ( $old_status && $old_status !== $post->post_status ) {
-			do_action( 'wlr_return_status_changed', $post_id, $post->post_status, $old_status );
-		}
-		update_post_meta( $post_id, '_wlr_prev_status', $post->post_status );
 	}
 
 	// -------------------------------------------------------------------------
 	// Email al cliente: conferma ricezione
 	// -------------------------------------------------------------------------
 
-
 	private function send_customer_received( int $return_id ): void {
-		error_log( "[WLR-DEBUG] send_customer_received START return_id={$return_id}" );
 		$data = $this->get_email_data( $return_id );
 		if ( ! $data ) {
-			error_log( '[WLR-DEBUG] send_customer_received: get_email_data returned NULL' );
 			return;
 		}
-		error_log( "[WLR-DEBUG] send_customer_received: data OK, to={$data['customer_email']}" );
 
 		$subject = sprintf(
 			/* translators: %s: return ID */
@@ -377,6 +344,10 @@ class WLR_Emails {
 			'is_guest'       => $is_guest,
 			'customer_email' => $order->get_billing_email(),
 			'reason'         => get_post_meta( $return_id, '_wlr_reason', true ),
+			'reason_label'   => ( static function( string $key ): string {
+				$r = WLR_Customer_Account::instance()->get_return_reasons();
+				return $r[ $key ] ?? $key;
+			} )( get_post_meta( $return_id, '_wlr_reason', true ) ),
 			'items'          => get_post_meta( $return_id, '_wlr_items', true ) ?: [],
 			'notes'          => $post->post_content,
 			'status'         => $post->post_status,
@@ -422,8 +393,6 @@ class WLR_Emails {
 			'From: ' . get_bloginfo( 'name' ) . ' <' . get_option( 'admin_email' ) . '>',
 		];
 
-		error_log( "[WLR-DEBUG] wp_mail to={$to} subject={$subject} msg_len=" . strlen( $message ) );
-		$sent = wp_mail( $to, $subject, $message, $headers );
-		error_log( '[WLR-DEBUG] wp_mail result=' . ( $sent ? 'OK' : 'FAILED' ) );
+		wp_mail( $to, $subject, $message, $headers );
 	}
 }
