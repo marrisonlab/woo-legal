@@ -1,0 +1,89 @@
+/* Woo Legal Returns – Admin Styles */
+
+.wlr-admin-wrap .search-form {
+	margin: 8px 0 16px;
+}
+.wlr-admin-wrap .search-form input[type=search] {
+	width: 260px;
+	margin-right: 6px;
+}
+
+/* Badge (riutilizzati in admin) */
+.wlr-badge {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .5px;
+}
+.wlr-badge--pending  { background: #f0ad4e; color: #fff; }
+.wlr-badge--success  { background: #5cb85c; color: #fff; }
+.wlr-badge--error    { background: #d9534f; color: #fff; }
+.wlr-badge--info     { background: #5bc0de; color: #fff; }
+.wlr-badge--muted    { background: #999;    color: #fff; }
+
+/* Padding esplicito dentro i postbox della pagina resi */
+.wlr-admin-wrap .postbox .inside {
+	padding: 10px 12px 12px;
+}
+.wlr-admin-wrap .postbox .hndle {
+	padding: 8px 12px;
+}
+
+/* Detail grid layout */
+.wlr-detail-grid {
+	display: grid;
+	grid-template-columns: 1fr 340px;
+	gap: 20px;
+	margin-top: 16px;
+	align-items: start;
+}
+@media (max-width: 900px) {
+	.wlr-detail-grid { grid-template-columns: 1fr; }
+}
+
+.wlr-meta-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 13px;
+}
+.wlr-meta-table th,
+.wlr-meta-table td {
+	padding: 8px 10px;
+	border-bottom: 1px solid #f0f0f0;
+	vertical-align: top;
+}
+.wlr-meta-table th {
+	width: 170px;
+	color: #555;
+	font-weight: 600;
+}
+
+.wlr-order-items-table th,
+.wlr-order-items-table td {
+	font-size: 13px;
+	padding: 7px 10px;
+}
+
+/* History list */
+.wlr-history-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.wlr-history-list li {
+	padding: 8px 0;
+	border-bottom: 1px solid #f0f0f0;
+	font-size: 13px;
+}
+.wlr-history-list li:last-child { border-bottom: none; }
+
+/* Admin messages */
+#wlr-admin-messages {
+	margin-top: 8px;
+	font-size: 13px;
+}
+#wlr-admin-messages.success { color: #155724; }
+#wlr-admin-messages.error   { color: #721c24; }

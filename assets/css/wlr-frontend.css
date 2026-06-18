@@ -1,0 +1,147 @@
+/* Woo Legal Returns – Frontend Styles */
+
+.wlr-return-order-action {
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid #e5e5e5;
+}
+.wlr-btn-return-order {
+	background: #fff !important;
+	border: 2px solid #cc0000 !important;
+	color: #cc0000 !important;
+	font-weight: 600;
+}
+.wlr-btn-return-order:hover {
+	background: #cc0000 !important;
+	color: #fff !important;
+}
+
+/* -------------------------------------------------------
+   Badge stati
+------------------------------------------------------- */
+.wlr-badge {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: .5px;
+}
+.wlr-badge--pending  { background: #f0ad4e; color: #fff; }
+.wlr-badge--success  { background: #5cb85c; color: #fff; }
+.wlr-badge--error    { background: #d9534f; color: #fff; }
+.wlr-badge--info     { background: #5bc0de; color: #fff; }
+.wlr-badge--muted    { background: #999;    color: #fff; }
+
+/* -------------------------------------------------------
+   Account returns list
+------------------------------------------------------- */
+.wlr-account-returns .wlr-intro {
+	background: #f7f7f7;
+	border-left: 4px solid #0073aa;
+	padding: 12px 16px;
+	font-size: 13px;
+	line-height: 1.6;
+	margin-bottom: 20px;
+}
+
+.wlr-btn-primary {
+	background: #0073aa !important;
+	color: #fff !important;
+	border-color: #006799 !important;
+}
+.wlr-btn-primary:hover {
+	background: #006799 !important;
+}
+
+/* -------------------------------------------------------
+   Return request form
+------------------------------------------------------- */
+.wlr-return-form-wrap {
+	max-width: 760px;
+}
+
+.wlr-back-link {
+	display: inline-block;
+	margin-bottom: 16px;
+	color: #0073aa;
+	text-decoration: none;
+	font-size: 13px;
+}
+.wlr-back-link:hover { text-decoration: underline; }
+
+.wlr-legal-notice {
+	background: #fffbf0;
+	border: 1px solid #f0c040;
+	border-left: 4px solid #f0c040;
+	padding: 12px 16px;
+	margin-bottom: 24px;
+	font-size: 13px;
+	line-height: 1.6;
+}
+
+.wlr-declaration-box {
+	background: #f9f9f9;
+	border: 1px solid #ddd;
+	padding: 14px 16px;
+	margin: 20px 0;
+	font-size: 13px;
+	line-height: 1.6;
+}
+
+.wlr-requester-info {
+	margin: 16px 0;
+	padding: 12px 16px;
+	background: #f0f6fb;
+	border-radius: 4px;
+	font-size: 13px;
+}
+.wlr-requester-info h4 { margin: 0 0 6px; }
+
+.wlr-checkbox-label {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	font-size: 13px;
+	cursor: pointer;
+}
+.wlr-checkbox-label input { margin-top: 3px; flex-shrink: 0; }
+
+/* Items table inside form */
+.wlr-items-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 12px 0;
+	font-size: 13px;
+}
+.wlr-items-table th,
+.wlr-items-table td {
+	padding: 8px 10px;
+	border: 1px solid #ddd;
+	text-align: left;
+}
+.wlr-items-table th { background: #f5f5f5; }
+
+/* Form messages */
+#wlr-form-messages {
+	padding: 12px 16px;
+	border-radius: 4px;
+	margin-top: 12px;
+	font-size: 13px;
+}
+#wlr-form-messages.success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+#wlr-form-messages.error   { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+
+/* -------------------------------------------------------
+   Withdrawal notice (thank-you page)
+------------------------------------------------------- */
+.wlr-withdrawal-notice {
+	margin: 24px 0;
+	padding: 16px 20px;
+	background: #e8f4fb;
+	border: 1px solid #bee3f8;
+	border-left: 4px solid #0073aa;
+	border-radius: 4px;
+}
+.wlr-withdrawal-notice h3 { margin-top: 0; }
