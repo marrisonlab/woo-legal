@@ -53,14 +53,24 @@
 
 		var $tbody = $( '#wlr-items-tbody' );
 		$.each( items, function ( i, item ) {
-			var row = '<tr>' +
-				'<td><input type="checkbox" class="wlr-item-check" data-item-id="' + item.item_id + '" checked></td>' +
-				'<td>' + item.name + '</td>' +
+			var noReturn  = !! item.no_return;
+			var rowClass  = noReturn ? ' class="wlr-item-no-return"' : '';
+			var checkAttr = noReturn
+				? 'disabled title="' + ( item.no_return_reason || 'Escluso dal diritto di recesso' ) + '"'
+				: 'checked';
+			var badge = noReturn
+				? ' <span class="wlr-no-return-badge" title="' + ( item.no_return_reason || '' ) + '">' +
+				  'Non recedibile</span>'
+				: '';
+			var qtyCell = noReturn
+				? '<td>—</td>'
+				: '<td><input type="number" class="wlr-item-qty" data-item-id="' + item.item_id + '"' +
+				  ' value="' + item.qty + '" min="1" max="' + item.qty + '" style="width:60px;"></td>';
+			var row = '<tr' + rowClass + '>' +
+				'<td><input type="checkbox" class="wlr-item-check" data-item-id="' + item.item_id + '" ' + checkAttr + '></td>' +
+				'<td>' + item.name + badge + '</td>' +
 				'<td>' + item.qty + '</td>' +
-				'<td>' +
-					'<input type="number" class="wlr-item-qty" data-item-id="' + item.item_id + '"' +
-					' value="' + item.qty + '" min="1" max="' + item.qty + '" style="width:60px;">' +
-				'</td>' +
+				qtyCell +
 			'</tr>';
 			$tbody.append( row );
 		} );

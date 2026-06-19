@@ -13,6 +13,10 @@ $total_pages = ceil( $total / $per_page );
 
 <div class="wrap wlr-admin-wrap">
 	<h1 class="wp-heading-inline"><?php esc_html_e( 'Richieste di Reso UE', 'woo-legal-returns' ); ?></h1>
+	<a href="<?php echo esc_url( admin_url( 'admin.php?page=wlr-setup-wizard&step=precontractual' ) ); ?>"
+		class="page-title-action">
+		<?php esc_html_e( 'Configurazione guidata', 'woo-legal-returns' ); ?>
+	</a>
 	<hr class="wp-header-end">
 
 	<?php if ( isset( $_GET['updated'] ) ) : ?>

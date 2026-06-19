@@ -3,7 +3,7 @@
  * Plugin Name:       Woo Legal Returns – EU Directive
  * Plugin URI:        https://github.com/marrisonlab/woo-legal
  * Description:       Adegua WooCommerce alla Direttiva UE sui Diritti dei Consumatori: modulo di recesso standardizzato, gestione richieste di reso nell'area cliente, notifiche email e dashboard admin.
- * Version:           1.2
+ * Version:           1.3
  * Author:            Marrisonlab
  * Author URI:        https://marrisonlab.com
  * Text Domain:       woo-legal-returns
@@ -17,7 +17,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WLR_VERSION',          '1.2' );
+define( 'WLR_VERSION',          '1.3' );
 define( 'WLR_PLUGIN_FILE',      __FILE__ );
 define( 'WLR_PLUGIN_BASENAME',  plugin_basename( __FILE__ ) );
 define( 'WLR_PLUGIN_DIR',       plugin_dir_path( __FILE__ ) );
@@ -55,11 +55,18 @@ function wlr_init(): void {
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-customer-account.php';
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-emails.php';
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-admin.php';
-
+	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-product-settings.php';
 	WLR_Post_Type::instance();
 	WLR_Customer_Account::instance();
 	WLR_Emails::instance();
 	WLR_Admin::instance();
+	WLR_Product_Settings::instance();
+
+	// Carica il wizard solo nell'admin
+	if ( is_admin() ) {
+		require_once WLR_PLUGIN_DIR . 'includes/class-wlr-setup-wizard.php';
+		WLR_Setup_Wizard::instance();
+	}
 }
 add_action( 'plugins_loaded', 'wlr_init' );
 

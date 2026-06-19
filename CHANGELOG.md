@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.3] - 2026-06-19
+
+### Correzioni
+- **Fix conflitto CSS frontend**: `WLR_Setup_Wizard` ora viene caricato solo nell'admin, risolvendo loop di caricamento e distorsione icone su checkout e My Account
+- **Fix errori AJAX frontend**: aggiunto `ob_end_clean()` e `try-catch` agli handler AJAX per prevenire corruzione JSON da output PHP stray (notice/warning)
+- **Fix errori AJAX admin**: applicata stessa fix a `handle_update_status` per eliminare "Errore di connessione" nel cambio stato dashboard
+- **Checkout notice sicuro**: iniezione via hook `woocommerce_checkout_before_customer_details` invece di `wp_footer` per evitare conflitti AJAX
+- **Link "Maggiori informazioni"**: ora punta alla pagina informativa creata dal wizard con `target="_blank"`
+
+### Aggiunte
+- **Pagina guida admin**: nuova pagina WooCommerce → Guida Resi con tab stile WordPress
+  - Tab 1: Wizard di Configurazione (con link diretto al wizard)
+  - Tab 2: Esclusioni Prodotti (come escludere prodotti dal recesso)
+  - Tab 3: Gestione Rimborsi (flusso completo: ricezione → approvazione → rimborso WooCommerce → chiusura)
+  - Tab 4: Stati Richieste (tabella riepilogo stati e effetti su ordine WooCommerce)
+
+### Modifiche file
+- `woo-legal-returns.php`: versione 1.3, caricamento `WLR_Setup_Wizard` solo in admin
+- `includes/class-wlr-customer-account.php`: `ob_end_clean()` + `try-catch` in `handle_get_order_items()` e `handle_submit()`, checkout notice via hook WooCommerce
+- `includes/class-wlr-admin.php`: aggiunta pagina guida, `ob_end_clean()` + `try-catch` in `handle_update_status()`
+- `templates/admin/guide.php`: nuovo file template per pagina guida con tab
+
+---
+
 ## [1.2] - 2026-06-18
 
 ### Aggiunte

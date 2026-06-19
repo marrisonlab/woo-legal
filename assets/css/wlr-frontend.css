@@ -134,6 +134,34 @@
 #wlr-form-messages.error   { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
 
 /* -------------------------------------------------------
+   Item esclusi dal diritto di recesso
+------------------------------------------------------- */
+.wlr-items-table tr.wlr-item-no-return {
+	background: #fafafa;
+	color: #a0a0a0;
+}
+.wlr-items-table tr.wlr-item-no-return td {
+	border-color: #eee;
+}
+.wlr-items-table tr.wlr-item-no-return input[type="checkbox"] {
+	cursor: not-allowed;
+	opacity: .45;
+}
+.wlr-no-return-badge {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 2px 8px;
+	background: #fff3cd;
+	border: 1px solid #ffc107;
+	border-radius: 3px;
+	font-size: 11px;
+	font-weight: 600;
+	color: #856404;
+	vertical-align: middle;
+	cursor: help;
+}
+
+/* -------------------------------------------------------
    Withdrawal notice (thank-you page)
 ------------------------------------------------------- */
 .wlr-withdrawal-notice {

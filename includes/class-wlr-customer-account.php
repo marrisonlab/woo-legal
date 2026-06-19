@@ -36,6 +36,8 @@ class WLR_Customer_Account {
 		add_action( 'woocommerce_thankyou', [ $this, 'maybe_render_withdrawal_notice' ] );
 		add_action( 'woocommerce_before_customer_login_form', [ $this, 'maybe_inject_guest_return_form' ] );
 		add_action( 'woocommerce_order_details_after_order_table', [ $this, 'maybe_add_return_button_to_order_page' ] );
+		add_action( 'woocommerce_checkout_before_customer_details', [ $this, 'render_checkout_notice' ] );
+		add_shortcode( 'wlr_checkout_notice', [ $this, 'render_checkout_notice_shortcode' ] );
 	}
 
 	public function add_endpoint(): void {
@@ -59,6 +61,9 @@ class WLR_Customer_Account {
 	}
 
 	public function enqueue_assets(): void {
+		if ( is_checkout() ) {
+			return;
+		}
 		if ( ! is_account_page() && ! is_wc_endpoint_url( 'view-order' ) ) {
 			return;
 		}
@@ -225,75 +230,111 @@ class WLR_Customer_Account {
 	 * Gestisce la submit AJAX del form di reso (utenti registrati e ospiti).
 	 */
 	public function handle_submit(): void {
-		check_ajax_referer( 'wlr_submit_return', 'nonce' );
-
-		$order_id    = absint( $_POST['order_id'] ?? 0 );
-		$reason      = sanitize_text_field( $_POST['reason'] ?? '' );
-		$notes       = sanitize_textarea_field( $_POST['notes'] ?? '' );
-		$items_raw   = json_decode( stripslashes( $_POST['items'] ?? '[]' ), true );
-
-		if ( ! $order_id || ! $reason ) {
-			wp_send_json_error( [ 'message' => __( 'Compila tutti i campi obbligatori.', 'woo-legal-returns' ) ] );
+		// Pulisce qualsiasi output stray (notice/warning PHP) che romperebbe il JSON.
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
 		}
 
-		if ( empty( $_POST['confirm_withdrawal'] ) ) {
-			wp_send_json_error( [ 'message' => __( 'È necessario confermare la dichiarazione di recesso per procedere.', 'woo-legal-returns' ) ] );
-		}
+		try {
+			check_ajax_referer( 'wlr_submit_return', 'nonce' );
 
-		if ( is_user_logged_in() ) {
-			$customer_id = get_current_user_id();
-			$extra       = [];
-		} else {
-			// Ospite: autenticazione via order_key + billing_email.
-			$order_key   = sanitize_text_field( $_POST['order_key'] ?? '' );
-			$guest_email = sanitize_email( $_POST['guest_email'] ?? '' );
+			$order_id    = absint( $_POST['order_id'] ?? 0 );
+			$reason      = sanitize_text_field( $_POST['reason'] ?? '' );
+			$notes       = sanitize_textarea_field( $_POST['notes'] ?? '' );
+			$items_raw   = json_decode( stripslashes( $_POST['items'] ?? '[]' ), true );
 
-			if ( ! $order_key || ! $guest_email ) {
-				wp_send_json_error( [ 'message' => __( 'Inserisci la chiave ordine e la tua email per procedere.', 'woo-legal-returns' ) ] );
+			if ( ! $order_id || ! $reason ) {
+				wp_send_json_error( [ 'message' => __( 'Compila tutti i campi obbligatori.', 'woo-legal-returns' ) ] );
+				return;
 			}
 
-			$customer_id = 0;
-			$extra       = [
-				'order_key'   => $order_key,
-				'guest_email' => $guest_email,
-			];
-		}
+			if ( empty( $_POST['confirm_withdrawal'] ) ) {
+				wp_send_json_error( [ 'message' => __( 'È necessario confermare la dichiarazione di recesso per procedere.', 'woo-legal-returns' ) ] );
+				return;
+			}
 
-		$result = WLR_Post_Type::create_return(
-			array_merge(
+			// Verifica che nessun prodotto incluso sia escluso dal recesso.
+			$order_obj = wc_get_order( $order_id );
+			if ( $order_obj && ! empty( $items_raw ) ) {
+				foreach ( $items_raw as $item_data ) {
+					$order_item = $order_obj->get_item( absint( $item_data['item_id'] ?? 0 ) );
+					if ( $order_item instanceof \WC_Order_Item_Product ) {
+						$product = $order_item->get_product();
+						if ( $product && WLR_Product_Settings::is_no_return( $product->get_id() ) ) {
+							wp_send_json_error( [
+								'message' => sprintf(
+									/* translators: %s: nome prodotto */
+									__( 'Il prodotto "%s" è escluso dal diritto di recesso ai sensi dell\'art. 59 D.Lgs. 206/2005.', 'woo-legal-returns' ),
+									$order_item->get_name()
+								),
+							] );
+							return;
+						}
+					}
+				}
+			}
+
+			if ( is_user_logged_in() ) {
+				$customer_id = get_current_user_id();
+				$extra       = [];
+			} else {
+				// Ospite: autenticazione via order_key + billing_email.
+				$order_key   = sanitize_text_field( $_POST['order_key'] ?? '' );
+				$guest_email = sanitize_email( $_POST['guest_email'] ?? '' );
+
+				if ( ! $order_key || ! $guest_email ) {
+					wp_send_json_error( [ 'message' => __( 'Inserisci la chiave ordine e la tua email per procedere.', 'woo-legal-returns' ) ] );
+					return;
+				}
+
+				$customer_id = 0;
+				$extra       = [
+					'order_key'   => $order_key,
+					'guest_email' => $guest_email,
+				];
+			}
+
+			$result = WLR_Post_Type::create_return(
+				array_merge(
+					[
+						'order_id'    => $order_id,
+						'customer_id' => $customer_id,
+						'reason'      => $reason,
+						'notes'       => $notes,
+						'items'       => is_array( $items_raw ) ? $items_raw : [],
+					],
+					$extra
+				)
+			);
+
+			if ( is_wp_error( $result ) ) {
+				wp_send_json_error( [ 'message' => $result->get_error_message() ] );
+				return;
+			}
+
+			// Invia notifiche email (try/catch: errori email non rompono la risposta AJAX).
+			try {
+				do_action( 'wlr_return_created', $result, $order_id, $customer_id );
+			} catch ( \Throwable $e ) {
+				error_log( '[WLR] Errore invio email su wlr_return_created: ' . $e->getMessage() );
+			}
+
+			$redirect = is_user_logged_in()
+				? wc_get_account_endpoint_url( self::ENDPOINT )
+				: wc_get_endpoint_url( 'order-received', $order_id, wc_get_checkout_url() ) . '?key=' . urlencode( $extra['order_key'] ?? '' );
+
+			wp_send_json_success(
 				[
-					'order_id'    => $order_id,
-					'customer_id' => $customer_id,
-					'reason'      => $reason,
-					'notes'       => $notes,
-					'items'       => is_array( $items_raw ) ? $items_raw : [],
-				],
-				$extra
-			)
-		);
+					'message'    => __( 'Richiesta di reso inviata con successo!', 'woo-legal-returns' ),
+					'return_id'  => $result,
+					'redirect'   => $redirect,
+				]
+			);
 
-		if ( is_wp_error( $result ) ) {
-			wp_send_json_error( [ 'message' => $result->get_error_message() ] );
-		}
-
-		// Invia notifiche email (try/catch: errori email non rompono la risposta AJAX).
-		try {
-			do_action( 'wlr_return_created', $result, $order_id, $customer_id );
 		} catch ( \Throwable $e ) {
-			error_log( '[WLR] Errore invio email su wlr_return_created: ' . $e->getMessage() );
+			error_log( '[WLR] handle_submit error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			wp_send_json_error( [ 'message' => __( 'Errore interno. Controlla il debug.log del server.', 'woo-legal-returns' ) ] );
 		}
-
-		$redirect = is_user_logged_in()
-			? wc_get_account_endpoint_url( self::ENDPOINT )
-			: wc_get_endpoint_url( 'order-received', $order_id, wc_get_checkout_url() ) . '?key=' . urlencode( $extra['order_key'] ?? '' );
-
-		wp_send_json_success(
-			[
-				'message'    => __( 'Richiesta di reso inviata con successo!', 'woo-legal-returns' ),
-				'return_id'  => $result,
-				'redirect'   => $redirect,
-			]
-		);
 	}
 
 	/**
@@ -301,44 +342,62 @@ class WLR_Customer_Account {
 	 * Supporta sia utenti registrati che ospiti (via order_key).
 	 */
 	public function handle_get_order_items(): void {
-		check_ajax_referer( 'wlr_submit_return', 'nonce' );
-
-		$order_id = absint( $_POST['order_id'] ?? 0 );
-		$order    = $order_id ? wc_get_order( $order_id ) : null;
-
-		if ( ! $order ) {
-			wp_send_json_error( [ 'message' => __( 'Ordine non trovato.', 'woo-legal-returns' ) ] );
+		// Pulisce qualsiasi output stray (notice/warning PHP) che romperebbe il JSON.
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
 		}
 
-		if ( is_user_logged_in() ) {
-			// Registrato: verifica ownership.
-			if ( (int) $order->get_customer_id() !== get_current_user_id() ) {
-				wp_send_json_error( [ 'message' => __( 'Non autorizzato.', 'woo-legal-returns' ) ] );
-			}
-		} else {
-			// Ospite: verifica order_key.
-			$order_key = sanitize_text_field( $_POST['order_key'] ?? '' );
-			if ( ! $order_key || ! hash_equals( $order->get_order_key(), $order_key ) ) {
-				wp_send_json_error( [ 'message' => __( 'Chiave ordine non valida.', 'woo-legal-returns' ) ] );
-			}
-		}
+		try {
+			check_ajax_referer( 'wlr_submit_return', 'nonce' );
 
-		$items = [];
-		foreach ( $order->get_items() as $item_id => $item ) {
-			/** @var \WC_Order_Item_Product $item */
-			$product = $item->get_product();
-			if ( ! $product || $product->is_virtual() || $product->is_downloadable() ) {
-				continue;
-			}
-			$items[] = [
-				'item_id' => $item_id,
-				'name'    => $item->get_name(),
-				'qty'     => $item->get_quantity(),
-				'sku'     => $product->get_sku(),
-			];
-		}
+			$order_id = absint( $_POST['order_id'] ?? 0 );
+			$order    = $order_id ? wc_get_order( $order_id ) : null;
 
-		wp_send_json_success( [ 'items' => $items ] );
+			if ( ! $order ) {
+				wp_send_json_error( [ 'message' => __( 'Ordine non trovato.', 'woo-legal-returns' ) ] );
+				return;
+			}
+
+			if ( is_user_logged_in() ) {
+				// Registrato: verifica ownership.
+				if ( (int) $order->get_customer_id() !== get_current_user_id() ) {
+					wp_send_json_error( [ 'message' => __( 'Non autorizzato.', 'woo-legal-returns' ) ] );
+					return;
+				}
+			} else {
+				// Ospite: verifica order_key.
+				$order_key = sanitize_text_field( $_POST['order_key'] ?? '' );
+				if ( ! $order_key || ! hash_equals( $order->get_order_key(), $order_key ) ) {
+					wp_send_json_error( [ 'message' => __( 'Chiave ordine non valida.', 'woo-legal-returns' ) ] );
+					return;
+				}
+			}
+
+			$items = [];
+			foreach ( $order->get_items() as $item_id => $item ) {
+				/** @var \WC_Order_Item_Product $item */
+				$product = $item->get_product();
+				if ( ! $product || $product->is_virtual() || $product->is_downloadable() ) {
+					continue;
+				}
+				$product_id = $product->get_id();
+				$no_return  = WLR_Product_Settings::is_no_return( $product_id );
+				$items[] = [
+					'item_id'          => $item_id,
+					'name'             => $item->get_name(),
+					'qty'              => $item->get_quantity(),
+					'sku'              => $product->get_sku(),
+					'no_return'        => $no_return,
+					'no_return_reason' => $no_return ? WLR_Product_Settings::get_exclusion_reason_label( $product_id ) : '',
+				];
+			}
+
+			wp_send_json_success( [ 'items' => $items ] );
+
+		} catch ( \Throwable $e ) {
+			error_log( '[WLR] handle_get_order_items error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			wp_send_json_error( [ 'message' => __( 'Errore interno. Controlla il debug.log del server.', 'woo-legal-returns' ) ] );
+		}
 	}
 
 	/**
@@ -438,6 +497,82 @@ class WLR_Customer_Account {
 			'woo-legal-returns/',
 			WLR_PLUGIN_DIR . 'templates/'
 		);
+	}
+
+
+	// -------------------------------------------------------------------------
+	// Checkout notice
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Avviso diritto di recesso nel checkout.
+	 * Iniettato via hook woocommerce_checkout_before_customer_details.
+	 */
+	public function render_checkout_notice(): void {
+		$opts = get_option( 'wlr_setup_options', [] );
+		if ( empty( $opts['checkout_notice_enabled'] ) ) {
+			return;
+		}
+		$text = (string) ( $opts['checkout_notice_text'] ?? '' );
+		if ( ! $text ) {
+			return;
+		}
+
+		// Ottieni URL della pagina informativa reso creata nel wizard
+		$page_id = (int) ( $opts['precontractual_page_id'] ?? 0 );
+		$info_url = $page_id ? get_permalink( $page_id ) : '';
+
+		if ( $info_url ) {
+			// Se c'è già un link, sostituisci l'href
+			if ( preg_match( '/<a\s+href/i', $text ) ) {
+				$text = preg_replace_callback(
+					'/<a\s+[^>]*>([^<]+)<\/a>/i',
+					function( $matches ) use ( $info_url ) {
+						return '<a href="' . esc_url( $info_url ) . '" target="_blank" rel="noopener">' . $matches[1] . '</a>';
+					},
+					$text
+				);
+			} else {
+				// Rimuovi il testo normale "Maggiori informazioni" se presente
+				$text = preg_replace( '/\s*Maggiori informazioni\s*/i', '', $text );
+				// Aggiungi il link alla fine
+				$text .= ' <a href="' . esc_url( $info_url ) . '" target="_blank" rel="noopener">Maggiori informazioni</a>';
+			}
+		}
+
+		$safe_html = wp_kses(
+			$text,
+			[ 'a' => [ 'href' => [], 'target' => [], 'rel' => [] ], 'strong' => [], 'em' => [] ]
+		);
+		echo '<div class="wlr-checkout-notice" style="margin-bottom:16px;padding:12px 16px;background:#e8f4fd;border-left:4px solid #2271b1;font-size:.875rem;">';
+		echo $safe_html;
+		echo '</div>';
+	}
+
+	// -------------------------------------------------------------------------
+	// Shortcode checkout notice
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Shortcode per mostrare l'avviso di recesso nel checkout.
+	 * Uso: [wlr_checkout_notice]
+	 *
+	 * @return string
+	 */
+	public function render_checkout_notice_shortcode(): string {
+		$opts = get_option( 'wlr_setup_options', [] );
+		if ( empty( $opts['checkout_notice_enabled'] ) ) {
+			return '';
+		}
+		$text = (string) ( $opts['checkout_notice_text'] ?? '' );
+		if ( ! $text ) {
+			return '';
+		}
+		$safe_html = wp_kses(
+			$text,
+			[ 'a' => [ 'href' => [], 'target' => [], 'rel' => [] ], 'strong' => [], 'em' => [] ]
+		);
+		return '<div class="wlr-checkout-notice" style="margin-bottom:16px;padding:12px 16px;background:#e8f4fd;border-left:4px solid #2271b1;font-size:.875rem;">' . $safe_html . '</div>';
 	}
 
 	// -------------------------------------------------------------------------

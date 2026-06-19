@@ -36,6 +36,15 @@ class WLR_Admin {
 			'wlr-returns',
 			[ $this, 'render_page' ]
 		);
+
+		add_submenu_page(
+			'woocommerce',
+			__( 'Guida Resi UE', 'woo-legal-returns' ),
+			__( 'Guida Resi', 'woo-legal-returns' ),
+			'manage_woocommerce',
+			'wlr-guide',
+			[ $this, 'render_guide' ]
+		);
 	}
 
 	public function enqueue_assets( string $hook ): void {
@@ -79,6 +88,10 @@ class WLR_Admin {
 			default:
 				$this->render_list();
 		}
+	}
+
+	public function render_guide(): void {
+		include WLR_PLUGIN_DIR . 'templates/admin/guide.php';
 	}
 
 	private function render_list(): void {
@@ -163,41 +176,54 @@ class WLR_Admin {
 	 * AJAX: aggiorna stato (da detail page).
 	 */
 	public function handle_update_status(): void {
-		check_ajax_referer( 'wlr_update_status', 'nonce' );
-
-		if ( ! current_user_can( 'manage_woocommerce' ) ) {
-			wp_send_json_error( [ 'message' => __( 'Permessi insufficienti.', 'woo-legal-returns' ) ] );
+		while ( ob_get_level() > 0 ) {
+			ob_end_clean();
 		}
 
-		$return_id  = absint( $_POST['return_id'] ?? 0 );
-		$new_status = sanitize_key( $_POST['status'] ?? '' );
-		$note       = sanitize_textarea_field( $_POST['note'] ?? '' );
-
-		if ( ! $return_id || ! $new_status ) {
-			wp_send_json_error( [ 'message' => __( 'Dati mancanti.', 'woo-legal-returns' ) ] );
-		}
-
-		$old_status = get_post_field( 'post_status', $return_id );
-
-		$ok = WLR_Post_Type::update_status( $return_id, $new_status, $note );
-		if ( ! $ok ) {
-			wp_send_json_error( [ 'message' => __( 'Aggiornamento fallito.', 'woo-legal-returns' ) ] );
-		}
-
-		// Emetti evento per le email (try/catch: errori email non rompono la risposta AJAX).
 		try {
-			do_action( 'wlr_return_status_changed', $return_id, $new_status, $old_status );
-		} catch ( \Throwable $e ) {
-			error_log( '[WLR] Errore invio email su wlr_return_status_changed: ' . $e->getMessage() );
-		}
+			check_ajax_referer( 'wlr_update_status', 'nonce' );
 
-		wp_send_json_success(
-			[
-				'message'      => __( 'Stato aggiornato.', 'woo-legal-returns' ),
-				'new_status'   => $new_status,
-				'status_label' => WLR_Post_Type::get_status_label( $new_status ),
-			]
-		);
+			if ( ! current_user_can( 'manage_woocommerce' ) ) {
+				wp_send_json_error( [ 'message' => __( 'Permessi insufficienti.', 'woo-legal-returns' ) ] );
+				return;
+			}
+
+			$return_id  = absint( $_POST['return_id'] ?? 0 );
+			$new_status = sanitize_key( $_POST['status'] ?? '' );
+			$note       = sanitize_textarea_field( $_POST['note'] ?? '' );
+
+			if ( ! $return_id || ! $new_status ) {
+				wp_send_json_error( [ 'message' => __( 'Dati mancanti.', 'woo-legal-returns' ) ] );
+				return;
+			}
+
+			$old_status = get_post_field( 'post_status', $return_id );
+
+			$ok = WLR_Post_Type::update_status( $return_id, $new_status, $note );
+			if ( ! $ok ) {
+				wp_send_json_error( [ 'message' => __( 'Aggiornamento fallito.', 'woo-legal-returns' ) ] );
+				return;
+			}
+
+			// Emetti evento per le email (try/catch: errori email non rompono la risposta AJAX).
+			try {
+				do_action( 'wlr_return_status_changed', $return_id, $new_status, $old_status );
+			} catch ( \Throwable $e ) {
+				error_log( '[WLR] Errore invio email su wlr_return_status_changed: ' . $e->getMessage() );
+			}
+
+			wp_send_json_success(
+				[
+					'message'      => __( 'Stato aggiornato.', 'woo-legal-returns' ),
+					'new_status'   => $new_status,
+					'status_label' => WLR_Post_Type::get_status_label( $new_status ),
+				]
+			);
+
+		} catch ( \Throwable $e ) {
+			error_log( '[WLR] handle_update_status error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			wp_send_json_error( [ 'message' => __( 'Errore interno. Controlla il debug.log del server.', 'woo-legal-returns' ) ] );
+		}
 	}
 
 	/**

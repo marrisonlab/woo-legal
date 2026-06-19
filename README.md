@@ -11,8 +11,10 @@ Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Dir
 | **Tab "Resi & Recesso"** | Sezione dedicata nell'area "Il mio account" con elenco richieste e form per nuove richieste |
 | **Caricamento prodotti dinamico** | I prodotti fisici dell'ordine selezionato vengono caricati via AJAX per la selezione degli item da rendere |
 | **Avviso thank-you page** | Notifica del diritto di recesso mostrata subito dopo l'acquisto (solo prodotti fisici) |
+| **Avviso checkout** | Informativa sul diritto di recesso nella pagina di checkout (configurabile via wizard) |
 | **Notifiche email** | Email al cliente (conferma ricezione + aggiornamenti stato) e all'admin (nuova richiesta) |
 | **Dashboard admin** | Lista resi con filtri per stato, ricerca, paginazione e pagina di dettaglio |
+| **Pagina guida admin** | Guida integrata con tab: wizard configurazione, esclusioni prodotti, gestione rimborsi, stati richieste |
 | **Gestione stati** | `Richiesto → Approvato → Rimborsato` (o Rifiutato/Annullato) con storico modifiche e note admin |
 | **HPOS compatibile** | Dichiarazione compatibilità WooCommerce High-Performance Order Storage |
 
@@ -38,7 +40,9 @@ woo-legal/
 │   ├── class-wlr-post-type.php         # CPT + CRUD richieste di reso
 │   ├── class-wlr-customer-account.php  # Tab My Account + AJAX
 │   ├── class-wlr-emails.php            # Notifiche email
-│   ├── class-wlr-admin.php             # Dashboard admin
+│   ├── class-wlr-admin.php             # Dashboard admin + guida
+│   ├── class-wlr-setup-wizard.php      # Wizard configurazione iniziale
+│   ├── class-wlr-product-settings.php # Impostazioni prodotto (esclusioni)
 │   └── class-wlr-github-updater.php    # Aggiornamenti automatici da GitHub
 ├── templates/
 │   ├── myaccount/
@@ -51,7 +55,8 @@ woo-legal/
 │   │   └── admin-new-request.php
 │   └── admin/
 │       ├── list.php                    # Lista admin
-│       └── detail.php                  # Dettaglio + azioni
+│       ├── detail.php                  # Dettaglio + azioni
+│       └── guide.php                   # Pagina guida admin
 └── assets/
     ├── css/wlr-frontend.css
     ├── css/wlr-admin.css
