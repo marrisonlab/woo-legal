@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Wizard di configurazione iniziale del plugin.
  *
@@ -69,12 +69,21 @@ class WLR_Setup_Wizard {
 		$step = sanitize_key( $_POST['wlr_wizard_step'] );
 		check_admin_referer( 'wlr_wizard_' . $step );
 
-		match ( $step ) {
-			'precontractual'  => $this->save_precontractual(),
-			'menu'            => $this->save_menu(),
-			'checkout_notice' => $this->save_checkout_notice(),
-			default           => null,
-		};
+		try {
+			match ( $step ) {
+				'precontractual'  => $this->save_precontractual(),
+				'menu'            => $this->save_menu(),
+				'checkout_notice' => $this->save_checkout_notice(),
+				default           => null,
+			};
+		} catch ( \Throwable $e ) {
+			error_log( '[WLR] Wizard step "' . $step . '" error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			wp_die(
+				esc_html__( 'Si è verificato un errore durante il salvataggio della configurazione. Riprova o controlla il debug.log del server.', 'woo-legal-returns' ),
+				esc_html__( 'Errore configurazione', 'woo-legal-returns' ),
+				[ 'back_link' => true ]
+			);
+		}
 	}
 
 	private function save_precontractual(): void {
@@ -554,9 +563,11 @@ class WLR_Setup_Wizard {
 		$postcode  = get_option( 'woocommerce_store_postcode', '' );
 		$raw_cc    = get_option( 'woocommerce_default_country', '' );
 		$cc        = $raw_cc ? explode( ':', $raw_cc )[0] : '';
-		$country   = ( $cc && function_exists( 'WC' ) )
-			? ( WC()->countries->get_countries()[ $cc ] ?? $cc )
-			: $cc;
+		$country   = $cc;
+		if ( $cc && function_exists( 'WC' ) && WC() && WC()->countries ) {
+			$countries = WC()->countries->get_countries();
+			$country   = $countries[ $cc ] ?? $cc;
+		}
 		$email     = get_option( 'woocommerce_email_from_address', '' )
 					?: get_option( 'admin_email', '' );
 

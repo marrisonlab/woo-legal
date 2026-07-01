@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**
  * Integrazione nell'area "Il mio account" di WooCommerce.
  *

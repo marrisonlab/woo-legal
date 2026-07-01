@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.1] - 2026-06-23
+
+### Correzioni
+- **Fix BOM UTF-8 (causa "headers already sent")**: rimosso il Byte Order Mark UTF-8 da `class-wlr-customer-account.php` e `class-wlr-setup-wizard.php`. Il BOM veniva emesso prima dei tag PHP causando errori "Cannot modify header information - headers already sent", che rompevano redirect del wizard (pagina bianca dopo lo step precontrattuale), risposte AJAX e header WooCommerce
+- **Fix pagina bianca nel wizard**: risolto anche un potenziale fatal error dovuto all'accesso non protetto a `WC()->countries` durante la creazione automatica della pagina informativa, quando WooCommerce non è ancora completamente inizializzato in `admin_init`
+- **Gestione errori wizard**: aggiunto `try-catch` con logging in `handle_post()`; eventuali errori durante il salvataggio mostrano ora un messaggio chiaro con back-link invece di una pagina bianca silenziosa
+
+### Modifiche file
+- `includes/class-wlr-customer-account.php`: rimosso BOM UTF-8
+- `includes/class-wlr-setup-wizard.php`: rimosso BOM UTF-8, accesso null-safe a `WC()->countries` in `get_default_page_content()`, `try-catch` in `handle_post()`
+
+---
+
 ## [1.3] - 2026-06-19
 
 ### Correzioni

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Woo Legal Returns – EU Directive</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
+        h1 { color: #333; }
+        h2 { color: #555; margin-top: 30px; }
+        h3 { color: #666; margin-top: 20px; }
+        ul { margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Woo Legal Returns – EU Directive</h1>
+
+    <h2>Panoramica</h2>
+
+    <p>Woo Legal Returns è un plugin per WordPress/WooCommerce che implementa le funzionalità richieste dalla Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673) e dal D.Lgs. 209/2025 (art. 54-bis Codice del Consumo) per la gestione del diritto di recesso nel commercio elettronico.</p>
+
+    <p>Il plugin fornisce un modulo di recesso standardizzato, un sistema di gestione delle richieste e le notifiche email necessarie per la conformità normativa, integrandosi con le funzionalità native di WooCommerce per i rimborsi.</p>
+
+    <h2>Funzionalità</h2>
+
+    <h3><strong>Modulo di recesso UE standardizzato</strong></h3>
+
+    <p>Modulo di recesso conforme all'Allegato I della Direttiva UE 2011/83/UE, accessibile dall'area cliente. Include:</p>
+    <ul>
+        <li>Selezione dell'ordine (solo ordini idonei: completati o in elaborazione, entro 14 giorni)</li>
+        <li>Selezione dei prodotti fisici da restituire (caricati dinamicamente)</li>
+        <li>Motivo del recesso (da lista predefinita o personalizzato)</li>
+        <li>Note aggiuntive</li>
+        <li>Conferma esplicita della dichiarazione di recesso (art. 54-bis)</li>
+        <li>Supporto per utenti ospiti (autenticazione via order_key + email)</li>
+    </ul>
+
+    <h3><strong>Finestra 14 giorni</strong></h3>
+
+    <p>Calcolo automatico della finestra di recesso basato sulla data di completamento, pagamento o creazione dell'ordine. Le richieste oltre i 14 giorni vengono bloccate automaticamente. I prodotti virtuali e scaricabili sono esclusi.</p>
+
+    <h3><strong>Tab "Resi & Recesso" nell'area cliente</strong></h3>
+
+    <p>Sezione dedicata nella pagina "Il mio account" di WooCommerce con:</p>
+    <ul>
+        <li>Elenco delle richieste di reso del cliente con stato e data</li>
+        <li>Form per inviare una nuova richiesta di recesso</li>
+        <li>Visualizzazione del dettaglio di ogni richiesta</li>
+    </ul>
+
+    <h3><strong>Avviso informativo</strong></h3>
+
+    <p>Avviso sul diritto di recesso mostrato:</p>
+    <ul>
+        <li><strong>Thank-you page</strong>: dopo il completamento dell'ordine (solo prodotti fisici)</li>
+        <li><strong>Checkout</strong>: prima del pulsante "Conferma ordine" (configurabile via wizard)</li>
+    </ul>
+
+    <p>Include link alla pagina informativa sul diritto di recesso.</p>
+
+    <h3><strong>Notifiche email</strong></h3>
+
+    <p><strong>Al cliente:</strong></p>
+    <ul>
+        <li>Conferma ricezione della richiesta di recesso</li>
+        <li>Aggiornamento dello stato (approvato, rimborsato, rifiutato)</li>
+    </ul>
+
+    <p><strong>All'amministratore:</strong></p>
+    <ul>
+        <li>Notifica di una nuova richiesta di recesso ricevuta</li>
+    </ul>
+
+    <h3><strong>Dashboard amministrativa</strong></h3>
+
+    <p>Dashboard completa accessibile da WooCommerce → Resi UE:</p>
+
+    <p><strong>Lista resi:</strong></p>
+    <ul>
+        <li>Filtri per stato, ricerca, paginazione</li>
+        <li>Colonne: ID, Cliente, Ordine, Stato, Data, Azioni</li>
+    </ul>
+
+    <p><strong>Pagina di dettaglio:</strong></p>
+    <ul>
+        <li>Informazioni ordine e cliente</li>
+        <li>Prodotti selezionati, motivo e note</li>
+        <li>Storico dei cambiamenti di stato</li>
+        <li>Form per aggiornare lo stato e aggiungere note</li>
+    </ul>
+
+    <p><strong>Pagina guida:</strong></p>
+    <ul>
+        <li>Tab "Wizard Configurazione": spiegazione del wizard con link diretto</li>
+        <li>Tab "Esclusioni Prodotti": come escludere prodotti dal recesso (art. 59)</li>
+        <li>Tab "Gestione Rimborsi": flusso completo dal ricevimento alla chiusura</li>
+        <li>Tab "Stati Richieste": tabella riepilogo stati e effetti su ordine WooCommerce</li>
+    </ul>
+
+    <h3><strong>Gestione stati</strong></h3>
+
+    <p>Stati delle richieste:</p>
+    <ul>
+        <li><strong>In attesa</strong>: richiesta ricevuta, in attesa di valutazione</li>
+        <li><strong>Accettata</strong>: richiesta approvata, ordine WooCommerce in sospeso</li>
+        <li><strong>Rimborsata</strong>: rimborso emesso, ordine WooCommerce rimborsato</li>
+        <li><strong>Rifiutata</strong>: richiesta rifiutata, ordine WooCommerce non modificato</li>
+        <li><strong>Annullata</strong>: richiesta annullata dal cliente</li>
+    </ul>
+
+    <p>Il cambio di stato attiva automaticamente email di notifica e aggiornamento dell'ordine WooCommerce.</p>
+
+    <h3><strong>Esclusione prodotti dal diritto di recesso</strong></h3>
+
+    <p>Esclusione di singoli prodotti conformemente all'art. 59 D.Lgs. 206/2005:</p>
+    <ul>
+        <li>Beni confezionati su misura o personalizzati</li>
+        <li>Beni deperibili</li>
+        <li>Beni sigillati aperti</li>
+        <li>Contenuti audio/video o software sigillato aperto</li>
+        <li>Giornali, periodici e riviste non sigillate</li>
+        <li>Servizi di fornitura di contenuto digitale non su supporto materiale</li>
+    </ul>
+
+    <p>Configurabile nella scheda "Diritto di recesso" del prodotto in WooCommerce.</p>
+
+    <h3><strong>Wizard di configurazione iniziale</strong></h3>
+
+    <p>Wizard guidato accessibile da WooCommerce → Resi UE → Configurazione:</p>
+
+    <p><strong>1. Informativa Precontrattuale</strong></p>
+    <ul>
+        <li>Crea automaticamente una nuova pagina con testo standard aggiornato</li>
+        <li>Oppure associa una pagina esistente del sito</li>
+    </ul>
+
+    <p><strong>2. Menu di Navigazione</strong></p>
+    <ul>
+        <li>Aggiunge automaticamente il link alla pagina informativa nei menu selezionati</li>
+        <li>Può essere saltato per aggiungere il link manualmente</li>
+    </ul>
+
+    <p><strong>3. Avviso al Checkout</strong></p>
+    <ul>
+        <li>Configura l'avviso informativo nella pagina di checkout</li>
+        <li>Permette di abilitare/disabilitare e personalizzare il testo</li>
+    </ul>
+
+    <p>Il wizard può essere rieseguito in qualsiasi momento.</p>
+
+    <h2>Flussi di funzionamento</h2>
+
+    <h3><strong>Flusso cliente</strong></h3>
+
+    <ol>
+        <li>Accede a "Il mio account" → "Resi & Recesso"</li>
+        <li>Seleziona l'ordine (solo ordini idonei)</li>
+        <li>Seleziona i prodotti da restituire e le quantità</li>
+        <li>Seleziona il motivo e aggiunge note opzionali</li>
+        <li>Conferma la dichiarazione di recesso</li>
+        <li>Invia la richiesta e riceve email di conferma</li>
+        <li>Visualizza lo stato dalla lista resi</li>
+    </ol>
+
+    <h3><strong>Flusso amministratore</strong></h3>
+
+    <ol>
+        <li>Riceve email di notifica per ogni nuova richiesta</li>
+        <li>Accede a WooCommerce → Resi UE</li>
+        <li>Apre il dettaglio della richiesta per valutarla</li>
+        <li>Se approva: cambia stato in "Accettata" (ordine WooCommerce in sospeso, email al cliente)</li>
+        <li>Emette il rimborso tramite WooCommerce</li>
+        <li>Cambia stato in "Rimborsata" (ordine WooCommerce rimborsato, email al cliente)</li>
+        <li>Se rifiuta: cambia stato in "Rifiutata" (ordine WooCommerce non modificato, email al cliente)</li>
+    </ol>
+</body>
+</html>
