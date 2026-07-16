@@ -29,9 +29,9 @@ class WLR_GitHub_Updater {
 	}
 
 	public function hooks(): void {
-		add_filter( 'pre_set_site_transient_update_plugins', [ $this, 'check_update' ] );
-		add_filter( 'plugins_api',                           [ $this, 'plugin_info' ], 20, 3 );
-		add_filter( 'upgrader_source_selection',             [ $this, 'fix_folder_name' ], 10, 4 );
+		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_update' ) );
+		add_filter( 'plugins_api', array( $this, 'plugin_info' ), 20, 3 );
+		add_filter( 'upgrader_source_selection', array( $this, 'fix_folder_name' ), 10, 4 );
 	}
 
 	// -------------------------------------------------------------------------
@@ -57,24 +57,24 @@ class WLR_GitHub_Updater {
 		$remote_version = ltrim( $release['tag_name'], 'vV' );
 
 		if ( version_compare( $remote_version, $this->plugin_version, '>' ) ) {
-			$transient->response[ $this->plugin_basename ] = (object) [
+			$transient->response[ $this->plugin_basename ] = (object) array(
 				'slug'         => $this->plugin_slug,
 				'plugin'       => $this->plugin_basename,
 				'new_version'  => $remote_version,
 				'url'          => 'https://github.com/' . self::GITHUB_USER . '/' . self::GITHUB_REPO,
 				'package'      => $release['zipball_url'],
-				'icons'        => [],
-				'banners'      => [],
+				'icons'        => array(),
+				'banners'      => array(),
 				'requires_php' => '8.0',
-			];
+			);
 		} else {
-			$transient->no_update[ $this->plugin_basename ] = (object) [
+			$transient->no_update[ $this->plugin_basename ] = (object) array(
 				'slug'        => $this->plugin_slug,
 				'plugin'      => $this->plugin_basename,
 				'new_version' => $remote_version,
 				'url'         => 'https://github.com/' . self::GITHUB_USER . '/' . self::GITHUB_REPO,
 				'package'     => '',
-			];
+			);
 		}
 
 		return $transient;
@@ -109,7 +109,7 @@ class WLR_GitHub_Updater {
 		$remote_version = ltrim( $release['tag_name'], 'vV' );
 		$changelog      = ! empty( $release['body'] ) ? nl2br( esc_html( $release['body'] ) ) : '';
 
-		return (object) [
+		return (object) array(
 			'name'          => 'Woo Legal Returns – EU Directive',
 			'slug'          => $this->plugin_slug,
 			'version'       => $remote_version,
@@ -119,11 +119,11 @@ class WLR_GitHub_Updater {
 			'requires'      => '6.0',
 			'requires_php'  => '8.0',
 			'last_updated'  => $release['published_at'] ?? '',
-			'sections'      => [
+			'sections'      => array(
 				'description' => 'Plugin per la gestione dei resi e del diritto di recesso ai sensi della Direttiva UE 2023/2673 e del D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).',
-				'changelog'   => $changelog ?: '<p>Vedi <a href="https://github.com/' . self::GITHUB_USER . '/' . self::GITHUB_REPO . '/releases">GitHub Releases</a>.</p>',
-			],
-		];
+				'changelog'   => '' !== $changelog ? $changelog : '<p>Vedi <a href="https://github.com/' . self::GITHUB_USER . '/' . self::GITHUB_REPO . '/releases">GitHub Releases</a>.</p>',
+			),
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -137,10 +137,10 @@ class WLR_GitHub_Updater {
 	 * "woo-legal-1.0/"; WordPress le considera plugin diversi se il nome
 	 * non corrisponde esattamente alla cartella originale.
 	 *
-	 * @param string      $source        Percorso cartella estratta.
-	 * @param string      $remote_source Percorso directory temporanea.
+	 * @param string       $source        Percorso cartella estratta.
+	 * @param string       $remote_source Percorso directory temporanea.
 	 * @param \WP_Upgrader $upgrader     Istanza upgrader.
-	 * @param array       $hook_extra    Dati contestuali (contiene 'plugin').
+	 * @param array        $hook_extra    Dati contestuali (contiene 'plugin').
 	 * @return string|\WP_Error
 	 */
 	public function fix_folder_name( string $source, string $remote_source, $upgrader, array $hook_extra ) {
@@ -199,24 +199,24 @@ class WLR_GitHub_Updater {
 		);
 		$response = wp_remote_get(
 			$url,
-			[
-				'headers' => [
+			array(
+				'headers' => array(
 					'Accept'     => 'application/vnd.github.v3+json',
 					'User-Agent' => 'WordPress/' . get_bloginfo( 'version' ) . '; ' . get_bloginfo( 'url' ),
-				],
+				),
 				'timeout' => 10,
-			]
+			)
 		);
 
 		if ( is_wp_error( $response ) || 200 !== wp_remote_retrieve_response_code( $response ) ) {
-			set_transient( $cache_key, [], 5 * MINUTE_IN_SECONDS );
+			set_transient( $cache_key, array(), 5 * MINUTE_IN_SECONDS );
 			return null;
 		}
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 
 		if ( empty( $data['tag_name'] ) ) {
-			set_transient( $cache_key, [], 5 * MINUTE_IN_SECONDS );
+			set_transient( $cache_key, array(), 5 * MINUTE_IN_SECONDS );
 			return null;
 		}
 

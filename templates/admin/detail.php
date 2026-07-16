@@ -14,8 +14,9 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 	<h1>
 		<?php
 		printf(
+			/* translators: %d: return request ID. */
 			esc_html__( 'Richiesta di Reso #%d', 'woo-legal-returns' ),
-			$return_id
+			esc_html( $return_id )
 		);
 		?>
 		<a href="<?php echo esc_url( $back_url ); ?>" class="page-title-action">
@@ -23,6 +24,7 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 		</a>
 	</h1>
 
+	<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only success notice. ?>
 	<?php if ( isset( $_GET['updated'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Stato aggiornato con successo.', 'woo-legal-returns' ); ?></p></div>
 	<?php endif; ?>
@@ -52,6 +54,42 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 							<th><?php esc_html_e( 'Data richiesta', 'woo-legal-returns' ); ?></th>
 							<td><?php echo esc_html( $created_at ? date_i18n( get_option( 'date_format' ) . ' H:i', strtotime( $created_at ) ) : '—' ); ?></td>
 						</tr>
+						<?php if ( ! empty( $submitted_at_utc ) ) : ?>
+							<tr>
+								<th><?php esc_html_e( 'Invio UTC', 'woo-legal-returns' ); ?></th>
+								<td><?php echo esc_html( $submitted_at_utc ); ?></td>
+							</tr>
+							<?php endif; ?>
+							<?php if ( ! empty( $receipt_hash ) ) : ?>
+							<tr>
+								<th><?php esc_html_e( 'Hash ricevuta', 'woo-legal-returns' ); ?></th>
+								<td><code><?php echo esc_html( $receipt_hash ); ?></code></td>
+							</tr>
+							<?php endif; ?>
+							<?php if ( ! empty( $deadline_at ) ) : ?>
+							<tr>
+								<th><?php esc_html_e( 'Termine indicativo', 'woo-legal-returns' ); ?></th>
+								<td>
+									<?php echo esc_html( $deadline_at ); ?>
+									<?php if ( ! empty( $deadline_may_be_expired ) ) : ?>
+										<br><span class="wlr-badge wlr-badge--error"><?php esc_html_e( 'Da verificare: oltre finestra indicativa', 'woo-legal-returns' ); ?></span>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<?php endif; ?>
+							<?php if ( ! empty( $ip ) || ! empty( $user_agent ) ) : ?>
+							<tr>
+								<th><?php esc_html_e( 'Dati tecnici', 'woo-legal-returns' ); ?></th>
+								<td>
+									<?php if ( ! empty( $ip ) ) : ?>
+										<strong>IP:</strong> <?php echo esc_html( $ip ); ?><br>
+									<?php endif; ?>
+									<?php if ( ! empty( $user_agent ) ) : ?>
+										<strong>User agent:</strong> <?php echo esc_html( $user_agent ); ?>
+									<?php endif; ?>
+								</td>
+							</tr>
+							<?php endif; ?>
 						<tr>
 							<th><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th>
 							<td><?php echo esc_html( $reasons[ $reason ] ?? $reason ); ?></td>
@@ -92,14 +130,14 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 						</thead>
 						<tbody>
 							<?php
-							$requested_items = [];
+							$requested_items = array();
 							foreach ( $items as $ri ) {
 								$requested_items[ $ri['item_id'] ] = $ri['qty'];
 							}
 							foreach ( $order->get_items() as $item_id => $item ) :
 								/** @var WC_Order_Item_Product $item */
 								$product = $item->get_product();
-							?>
+								?>
 							<tr>
 								<td>
 									<?php if ( $product ) : ?>
@@ -120,6 +158,29 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 							<?php endforeach; ?>
 						</tbody>
 					</table>
+						<?php if ( ! empty( $checkout_consents ) ) : ?>
+						<h3><?php esc_html_e( 'Consensi checkout registrati', 'woo-legal-returns' ); ?></h3>
+						<table class="widefat striped">
+							<thead>
+								<tr>
+									<th><?php esc_html_e( 'Tipo', 'woo-legal-returns' ); ?></th>
+									<th><?php esc_html_e( 'Esito', 'woo-legal-returns' ); ?></th>
+									<th><?php esc_html_e( 'Testo mostrato', 'woo-legal-returns' ); ?></th>
+									<th><?php esc_html_e( 'Data UTC', 'woo-legal-returns' ); ?></th>
+								</tr>
+							</thead>
+							<tbody>
+								<?php foreach ( $checkout_consents as $consent_type => $consent ) : ?>
+									<tr>
+										<td><?php echo esc_html( 'digital' === $consent_type ? __( 'Contenuto digitale', 'woo-legal-returns' ) : __( 'Servizio iniziato prima', 'woo-legal-returns' ) ); ?></td>
+										<td><?php echo esc_html( 'yes' === ( $consent['accepted'] ?? '' ) ? __( 'Accettato', 'woo-legal-returns' ) : __( 'Non accettato', 'woo-legal-returns' ) ); ?></td>
+										<td><?php echo esc_html( $consent['text'] ?? '' ); ?></td>
+										<td><?php echo esc_html( $consent['timestamp'] ?? '' ); ?></td>
+									</tr>
+								<?php endforeach; ?>
+							</tbody>
+						</table>
+					<?php endif; ?>
 					<?php else : ?>
 					<p><?php esc_html_e( 'Ordine non trovato.', 'woo-legal-returns' ); ?></p>
 					<?php endif; ?>
@@ -132,9 +193,10 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 				<h2 class="hndle"><?php esc_html_e( 'Storico modifiche', 'woo-legal-returns' ); ?></h2>
 				<div class="inside">
 					<ul class="wlr-history-list">
-						<?php foreach ( array_reverse( $history ) as $entry ) :
+						<?php
+						foreach ( array_reverse( $history ) as $entry ) :
 							$admin_user = get_userdata( $entry['user_id'] ?? 0 );
-						?>
+							?>
 						<li>
 							<strong><?php echo esc_html( WLR_Post_Type::get_status_label( $entry['status'] ) ); ?></strong>
 							— <?php echo esc_html( $entry['date'] ? date_i18n( get_option( 'date_format' ) . ' H:i', strtotime( $entry['date'] ) ) : '—' ); ?>
@@ -163,17 +225,21 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 					<?php if ( $customer ) : ?>
 					<p>
 						<strong>
+							<?php if ( ! empty( $customer->ID ) ) : ?>
 							<a href="<?php echo esc_url( get_edit_user_link( $customer->ID ) ); ?>">
 								<?php echo esc_html( $customer->display_name ); ?>
 							</a>
+							<?php else : ?>
+								<?php echo esc_html( $customer->display_name ); ?>
+							<?php endif; ?>
 						</strong><br>
 						<a href="mailto:<?php echo esc_attr( $customer->user_email ); ?>">
 							<?php echo esc_html( $customer->user_email ); ?>
 						</a>
 					</p>
-					<?php if ( $order ) : ?>
+						<?php if ( $order ) : ?>
 					<p>
-						<?php echo wp_kses_post( $order->get_formatted_billing_address() ); ?>
+							<?php echo wp_kses_post( $order->get_formatted_billing_address() ); ?>
 					</p>
 					<?php endif; ?>
 					<?php else : ?>

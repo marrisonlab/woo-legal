@@ -10,11 +10,20 @@ defined( 'ABSPATH' ) || exit;
 do_action( 'woocommerce_email_header', __( 'Aggiornamento richiesta di reso', 'woo-legal-returns' ), null );
 ?>
 
-<p><?php printf( esc_html__( 'Gentile %s,', 'woo-legal-returns' ), esc_html( $customer->display_name ) ); ?></p>
+<p>
+	<?php
+	printf(
+		/* translators: %s: customer display name. */
+		esc_html__( 'Gentile %s,', 'woo-legal-returns' ),
+		esc_html( $customer->display_name )
+	);
+	?>
+</p>
 
 <p>
 	<?php
 	printf(
+		/* translators: 1: return request ID, 2: order number. */
 		esc_html__( 'La tua richiesta di reso #%1$d per l\'ordine #%2$s è stata aggiornata.', 'woo-legal-returns' ),
 		(int) $return_id,
 		esc_html( $order->get_order_number() )
@@ -25,6 +34,7 @@ do_action( 'woocommerce_email_header', __( 'Aggiornamento richiesta di reso', 'w
 <p>
 	<?php
 	printf(
+		/* translators: %s: new return request status. */
 		esc_html__( 'Nuovo stato: %s', 'woo-legal-returns' ),
 		'<strong>' . esc_html( $new_status_label ) . '</strong>'
 	);
