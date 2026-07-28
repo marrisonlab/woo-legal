@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.4.0] - 2026-07-28
+
+### Aggiunte
+- **Versione plugin aggiornata a 1.4.0**: header WordPress e costante `WLR_VERSION` allineati alla nuova release.
+- **Pagina pubblica per il recesso**: nuova creazione automatica della pagina "Diritto di recesso" e shortcode `[wlr_return_form]` per consentire l'invio anche fuori dall'area account.
+- **Link e shortcode dedicati**: aggiunto `[wlr_withdrawal_link]` per inserire il link alla procedura digitale nelle informative e mantenuto `[wlr_checkout_notice]` per l'avviso checkout.
+- **Flusso a doppia conferma**: la richiesta viene prima validata, poi mostrata in riepilogo e registrata solo dopo conferma finale del cliente.
+- **Ricevuta probatoria**: ogni richiesta salva data/ora UTC, IP, user agent, hash SHA-256 della dichiarazione e stato di invio della ricevuta email.
+- **Consensi checkout per contenuti digitali e servizi**: nuovi campi checkout con testi configurabili e salvataggio dei consensi sull'ordine.
+- **Regole recesso per prodotti e categorie**: nuovo stato recesso ereditabile dalle categorie, con eccezioni per contenuti digitali, servizi, prodotti su misura, deperibili, sigillati, media, beni mescolati, periodici e altre esclusioni normative.
+- **Avvisi prodotto**: visualizzazione automatica e shortcode `[wlr_withdrawal_notice]` per indicare prodotti esclusi o soggetti a consenso espresso.
+- **Impostazioni admin**: pagina "Impostazioni Resi" per pagina pubblica, email notifiche, stati ordine idonei, modalita del termine 14 giorni, giorni di tolleranza e testi dei consensi.
+- **Export CSV**: nuova pagina "Export Resi" con filtri per stato, intervallo date e inclusione opzionale dei dati tecnici.
+- **Azioni massive admin**: aggiornamento stato di piu richieste dalla lista, con nota cliente opzionale.
+- **Colonna recesso sugli ordini WooCommerce**: stato della richiesta visibile sia nella lista ordini classica sia in quella HPOS.
+- **Integrazione privacy WordPress**: testo suggerito per la privacy policy, exporter ed eraser per i dati personali delle richieste.
+- **Tooling sviluppo**: aggiunti `composer.json`, `composer.lock`, `phpcs.xml.dist` e `.gitignore` per PHPCS, WPCS e compatibilita PHP/WP.
+
+### Miglioramenti
+- **Supporto ospiti piu completo**: link dalla thank-you page e dalle email con chiave ordine, piu lookup pubblico tramite numero ordine + email quando previsto.
+- **Validazione server-side centralizzata**: accesso ordine, stati idonei, finestra 14 giorni, duplicati e prodotti recedibili vengono controllati in `WLR_Post_Type::validate_return_request()`.
+- **Termine 14 giorni configurabile**: modalita indicativa o bloccante, decorrenza da completamento/pagamento o creazione ordine e tolleranza opzionale.
+- **Email aggiornate**: ricevuta cliente con hash, dati di invio e avviso termini; destinatari admin multipli; supporto email WooCommerce plain text.
+- **Wizard migliorato**: dati venditore precompilati e modificabili, aggiornamento della pagina informativa generata e logging errori tramite logger WooCommerce.
+- **Dashboard admin arricchita**: dettaglio con dati tecnici, hash ricevuta, termine indicativo, consensi checkout e gestione ospiti.
+- **Compatibilita coding standard**: progressiva conversione a sintassi array estesa, sanitizzazione/nonce piu espliciti e soppressioni PHPCS documentate.
+
+### Correzioni
+- **Duplicati piu precisi**: blocco solo delle richieste aperte o rimborsate, lasciando fuori quelle rifiutate/annullate.
+- **Prodotti non recedibili**: esclusione coerente anche per varianti e prodotti che ereditano lo stato dalla categoria.
+- **Prompt duplicati**: evitata la doppia visualizzazione del pulsante di recesso su thank-you page e dettaglio ordine.
+- **Updater GitHub**: normalizzate strutture array e fallback changelog per maggiore compatibilita con gli standard del progetto.
+
+### Modifiche file principali
+- `woo-legal-returns.php`: versione 1.4.0, caricamento consensi checkout, privacy, compatibilita shortcode legacy e creazione pagina pubblica in attivazione.
+- `includes/class-wlr-customer-account.php`: shortcode pubblici, flusso ospiti, doppia conferma AJAX, URL recesso centralizzati e pagina automatica.
+- `includes/class-wlr-post-type.php`: validazione centralizzata, hash ricevuta, deadline configurabile, dati tecnici e controlli prodotti.
+- `includes/class-wlr-product-settings.php`: stati recesso per prodotto/categoria, ereditarieta, avvisi prodotto e compatibilita meta legacy.
+- `includes/class-wlr-checkout-consent.php`: nuovo gestore dei consensi checkout.
+- `includes/class-wlr-privacy.php`: nuovo exporter/eraser dati personali e testo privacy policy.
+- `includes/class-wlr-annex-form.php`: compatibilita con lo shortcode legacy del modulo tipo.
+- `includes/class-wlr-admin.php`: impostazioni, export CSV, bulk action, colonna ordini e dettaglio probatorio.
+- `includes/class-wlr-emails.php`: ricevuta cliente, destinatari admin configurabili, link recesso estesi e opzionale aggiornamento stato ordine WooCommerce.
+- `templates/` e `assets/`: aggiornati form, liste, email e stili per riepilogo conferma, consensi e prodotti non recedibili.
+- `composer.json`, `composer.lock`, `phpcs.xml.dist`, `.gitignore`: aggiunto tooling di sviluppo.
+
+---
+
 ## [1.3.1] - 2026-06-23
 
 ### Correzioni

@@ -18,12 +18,12 @@ class WLR_Setup_Wizard {
 	private static ?WLR_Setup_Wizard $instance = null;
 
 	/** Passi del wizard: slug => etichetta. */
-	private array $steps = [
+	private array $steps = array(
 		'precontractual'  => 'Informativa precontrattuale',
 		'menu'            => 'Menu di navigazione',
 		'checkout_notice' => 'Avviso al checkout',
 		'complete'        => 'Completato',
-	];
+	);
 
 	public static function instance(): self {
 		if ( null === self::$instance ) {
@@ -34,9 +34,9 @@ class WLR_Setup_Wizard {
 	}
 
 	private function hooks(): void {
-		add_action( 'admin_menu',    [ $this, 'register_page' ] );
-		add_action( 'admin_init',    [ $this, 'handle_post' ] );
-		add_action( 'admin_notices', [ $this, 'show_setup_notice' ] );
+		add_action( 'admin_menu', array( $this, 'register_page' ) );
+		add_action( 'admin_init', array( $this, 'handle_post' ) );
+		add_action( 'admin_notices', array( $this, 'show_setup_notice' ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -50,7 +50,7 @@ class WLR_Setup_Wizard {
 			'',
 			'manage_options',
 			self::WIZARD_SLUG,
-			[ $this, 'render' ]
+			array( $this, 'render' )
 		);
 	}
 
@@ -66,7 +66,7 @@ class WLR_Setup_Wizard {
 			wp_die( esc_html__( 'Permessi insufficienti.', 'woo-legal-returns' ) );
 		}
 
-		$step = sanitize_key( $_POST['wlr_wizard_step'] );
+		$step = sanitize_key( wp_unslash( $_POST['wlr_wizard_step'] ) );
 		check_admin_referer( 'wlr_wizard_' . $step );
 
 		try {
@@ -77,30 +77,51 @@ class WLR_Setup_Wizard {
 				default           => null,
 			};
 		} catch ( \Throwable $e ) {
-			error_log( '[WLR] Wizard step "' . $step . '" error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
+			$this->log_error( 'Wizard step "' . $step . '" error: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine() );
 			wp_die(
 				esc_html__( 'Si è verificato un errore durante il salvataggio della configurazione. Riprova o controlla il debug.log del server.', 'woo-legal-returns' ),
 				esc_html__( 'Errore configurazione', 'woo-legal-returns' ),
-				[ 'back_link' => true ]
+				array( 'back_link' => true )
 			);
 		}
 	}
 
 	private function save_precontractual(): void {
-		$mode = sanitize_key( $_POST['page_mode'] ?? 'new' );
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+		$mode        = sanitize_key( wp_unslash( $_POST['page_mode'] ?? 'new' ) );
+		$trader_data = $this->sanitize_trader_data_from_post();
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
+
+		$this->save_trader_data( $trader_data );
 
 		if ( 'existing' === $mode ) {
-			$page_id = absint( $_POST['existing_page_id'] ?? 0 );
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+			$page_id = absint( wp_unslash( $_POST['existing_page_id'] ?? 0 ) );
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+			$refresh_existing_page = ! empty( $_POST['refresh_existing_page'] );
+			if ( $page_id && ( $refresh_existing_page || '1' === get_post_meta( $page_id, '_wlr_generated_precontractual_page', true ) ) ) {
+				wp_update_post(
+					array(
+						'ID'           => $page_id,
+						'post_content' => $this->get_default_page_content( $trader_data ),
+					)
+				);
+			}
 		} else {
-			$title   = sanitize_text_field(
-				$_POST['new_page_title'] ?? __( 'Informativa sul Diritto di Recesso', 'woo-legal-returns' )
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Verified in handle_post before dispatch; unslashed here and sanitized below.
+			$raw_title = wp_unslash( $_POST['new_page_title'] ?? __( 'Informativa sul Diritto di Recesso', 'woo-legal-returns' ) );
+			$title     = sanitize_text_field( $raw_title );
+			$page_id   = wp_insert_post(
+				array(
+					'post_title'   => $title,
+					'post_content' => $this->get_default_page_content( $trader_data ),
+					'post_status'  => 'publish',
+					'post_type'    => 'page',
+				)
 			);
-			$page_id = wp_insert_post( [
-				'post_title'   => $title,
-				'post_content' => $this->get_default_page_content(),
-				'post_status'  => 'publish',
-				'post_type'    => 'page',
-			] );
+			if ( $page_id && ! is_wp_error( $page_id ) ) {
+				update_post_meta( (int) $page_id, '_wlr_generated_precontractual_page', '1' );
+			}
 		}
 
 		if ( $page_id && ! is_wp_error( $page_id ) ) {
@@ -112,9 +133,10 @@ class WLR_Setup_Wizard {
 	}
 
 	private function save_menu(): void {
-		$page_id  = (int) $this->get_option( 'precontractual_page_id' );
-		$menu_ids = array_map( 'absint', (array) ( $_POST['menus'] ?? [] ) );
-		$added    = [];
+		$page_id = (int) $this->get_option( 'precontractual_page_id' );
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+		$menu_ids = array_map( 'absint', (array) wp_unslash( $_POST['menus'] ?? array() ) );
+		$added    = array();
 
 		foreach ( $menu_ids as $menu_id ) {
 			if ( ! $menu_id ) {
@@ -123,7 +145,8 @@ class WLR_Setup_Wizard {
 
 			// Evita duplicati: non aggiungere se il link è già presente.
 			if ( $page_id ) {
-				$existing = wp_get_nav_menu_items( $menu_id, [ 'nopaging' => true ] ) ?: [];
+				$existing_items = wp_get_nav_menu_items( $menu_id, array( 'nopaging' => true ) );
+				$existing       = $existing_items ? $existing_items : array();
 				foreach ( $existing as $nav_item ) {
 					if ( 'post_type' === $nav_item->type && (int) $nav_item->object_id === $page_id ) {
 						$added[] = $menu_id;
@@ -135,7 +158,7 @@ class WLR_Setup_Wizard {
 			$item_id = wp_update_nav_menu_item(
 				$menu_id,
 				0,
-				[
+				array(
 					'menu-item-title'     => $page_id
 						? get_the_title( $page_id )
 						: __( 'Informativa Recesso', 'woo-legal-returns' ),
@@ -143,7 +166,7 @@ class WLR_Setup_Wizard {
 					'menu-item-object-id' => $page_id,
 					'menu-item-type'      => 'post_type',
 					'menu-item-status'    => 'publish',
-				]
+				)
 			);
 			if ( $item_id && ! is_wp_error( $item_id ) ) {
 				$added[] = $menu_id;
@@ -161,7 +184,8 @@ class WLR_Setup_Wizard {
 	// -------------------------------------------------------------------------
 
 	public function render(): void {
-		$step = sanitize_key( $_GET['step'] ?? 'precontractual' );
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only wizard step routing.
+		$step = isset( $_GET['step'] ) ? sanitize_key( wp_unslash( $_GET['step'] ) ) : 'precontractual';
 		if ( ! array_key_exists( $step, $this->steps ) ) {
 			$step = 'precontractual';
 		}
@@ -176,10 +200,17 @@ class WLR_Setup_Wizard {
 			<div class="wlr-wizard-card">
 				<?php
 				switch ( $step ) {
-					case 'menu':     $this->render_step_menu();     break;
-					case 'checkout_notice': $this->render_step_checkout_notice(); break;
-					case 'complete': $this->render_step_complete(); break;
-					default:         $this->render_step_precontractual();
+					case 'menu':
+						$this->render_step_menu();
+						break;
+					case 'checkout_notice':
+						$this->render_step_checkout_notice();
+						break;
+					case 'complete':
+						$this->render_step_complete();
+						break;
+					default:
+						$this->render_step_precontractual();
 				}
 				?>
 			</div>
@@ -206,9 +237,16 @@ class WLR_Setup_Wizard {
 	}
 
 	private function render_step_precontractual(): void {
-		$saved_id = (int) $this->get_option( 'precontractual_page_id' );
-		$mode     = $saved_id ? 'existing' : 'new';
-		$pages    = get_pages( [ 'post_status' => 'publish', 'sort_column' => 'post_title' ] );
+		$saved_id          = (int) $this->get_option( 'precontractual_page_id' );
+		$mode              = $saved_id ? 'existing' : 'new';
+		$is_generated_page = $saved_id && '1' === get_post_meta( $saved_id, '_wlr_generated_precontractual_page', true );
+		$trader_data       = $this->get_trader_data();
+		$pages             = get_pages(
+			array(
+				'post_status' => 'publish',
+				'sort_column' => 'post_title',
+			)
+		);
 		?>
 		<h2><?php esc_html_e( 'Pagina Informativa Precontrattuale', 'woo-legal-returns' ); ?></h2>
 		<p class="wlr-step-desc">
@@ -249,8 +287,50 @@ class WLR_Setup_Wizard {
 						</option>
 						<?php endforeach; ?>
 					</select>
+					<p>
+						<label>
+							<input type="checkbox" name="refresh_existing_page" value="1" <?php checked( $is_generated_page ); ?>>
+							<?php esc_html_e( 'Aggiorna il contenuto della pagina selezionata con i dati venditore inseriti qui sotto', 'woo-legal-returns' ); ?>
+						</label>
+					</p>
 				</div>
 			</div>
+
+			<h3><?php esc_html_e( 'Dati venditore da inserire nell\'informativa', 'woo-legal-returns' ); ?></h3>
+			<p class="description">
+				<?php esc_html_e( 'Questi campi vengono precompilati dai dati WooCommerce quando disponibili. Puoi correggerli prima di generare la pagina.', 'woo-legal-returns' ); ?>
+			</p>
+
+			<table class="form-table wlr-trader-fields" role="presentation">
+				<tr>
+					<th scope="row"><label for="wlr_trader_name"><?php esc_html_e( 'Nome venditore', 'woo-legal-returns' ); ?></label></th>
+					<td>
+						<input type="text" id="wlr_trader_name" name="trader_name" class="regular-text"
+							value="<?php echo esc_attr( $trader_data['name'] ); ?>">
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wlr_trader_address"><?php esc_html_e( 'Indirizzo sede', 'woo-legal-returns' ); ?></label></th>
+					<td>
+						<textarea id="wlr_trader_address" name="trader_address" rows="3" class="large-text"><?php echo esc_textarea( $trader_data['address'] ); ?></textarea>
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wlr_trader_email"><?php esc_html_e( 'Email assistenza', 'woo-legal-returns' ); ?></label></th>
+					<td>
+						<input type="email" id="wlr_trader_email" name="trader_email" class="regular-text"
+							value="<?php echo esc_attr( $trader_data['email'] ); ?>">
+					</td>
+				</tr>
+				<tr>
+					<th scope="row"><label for="wlr_trader_phone"><?php esc_html_e( 'Telefono negozio', 'woo-legal-returns' ); ?></label></th>
+					<td>
+						<input type="text" id="wlr_trader_phone" name="trader_phone" class="regular-text"
+							value="<?php echo esc_attr( $trader_data['phone'] ); ?>">
+						<p class="description"><?php esc_html_e( 'WooCommerce non ha un campo telefono negozio standard: se lo compili, verra inserito nell\'informativa.', 'woo-legal-returns' ); ?></p>
+					</td>
+				</tr>
+			</table>
 
 			<div class="wlr-wizard-actions">
 				<div></div>
@@ -283,7 +363,7 @@ class WLR_Setup_Wizard {
 	}
 
 	private function render_step_menu(): void {
-		$saved_ids = (array) $this->get_option( 'menu_ids', [] );
+		$saved_ids = (array) $this->get_option( 'menu_ids', array() );
 		$nav_menus = wp_get_nav_menus();
 		$page_id   = (int) $this->get_option( 'precontractual_page_id' );
 		?>
@@ -319,13 +399,15 @@ class WLR_Setup_Wizard {
 						<span>
 							<?php echo esc_html( $menu->name ); ?>
 							<small style="color:#a7aaad;">
-								(<?php
+								(
+								<?php
 								printf(
 									/* translators: %d: numero voci menu */
 									esc_html__( '%d voci', 'woo-legal-returns' ),
-									$menu->count
+									absint( $menu->count )
 								);
-								?>)
+								?>
+									)
 							</small>
 						</span>
 					</label>
@@ -355,9 +437,10 @@ class WLR_Setup_Wizard {
 	}
 
 	private function save_checkout_notice(): void {
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
 		$enabled = ! empty( $_POST['checkout_notice_enabled'] );
-		$text    = sanitize_textarea_field( $_POST['checkout_notice_text'] ?? '' );
-
+		$text    = wp_kses_post( wp_unslash( $_POST['checkout_notice_text'] ?? '' ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 		$this->save_option( 'checkout_notice_enabled', $enabled );
 		$this->save_option( 'checkout_notice_text', $text );
 		$this->save_option( 'setup_complete', true );
@@ -535,11 +618,11 @@ class WLR_Setup_Wizard {
 	}
 
 	public static function get_options(): array {
-		return (array) get_option( self::OPTION_KEY, [] );
+		return (array) get_option( self::OPTION_KEY, array() );
 	}
 
-	public function get_option( string $key, $default = null ): mixed {
-		return self::get_options()[ $key ] ?? $default;
+	public function get_option( string $key, $fallback = null ): mixed {
+		return self::get_options()[ $key ] ?? $fallback;
 	}
 
 	private function save_option( string $key, mixed $value ): void {
@@ -548,38 +631,109 @@ class WLR_Setup_Wizard {
 		update_option( self::OPTION_KEY, $opts );
 	}
 
-	// -------------------------------------------------------------------------
-	// Contenuto default pagina informativa
-	// -------------------------------------------------------------------------
+	private function sanitize_trader_data_from_post(): array {
+		$defaults = $this->get_trader_data();
 
-	private function get_default_page_content(): string {
-		$site = get_bloginfo( 'name' );
-		$date = date_i18n( get_option( 'date_format' ) );
+		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+		$name    = sanitize_text_field( wp_unslash( $_POST['trader_name'] ?? $defaults['name'] ) );
+		$address = sanitize_textarea_field( wp_unslash( $_POST['trader_address'] ?? $defaults['address'] ) );
+		$email   = sanitize_email( wp_unslash( $_POST['trader_email'] ?? $defaults['email'] ) );
+		$phone   = sanitize_text_field( wp_unslash( $_POST['trader_phone'] ?? $defaults['phone'] ) );
+		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		// Dati store da WooCommerce.
-		$addr1     = get_option( 'woocommerce_store_address', '' );
-		$addr2     = get_option( 'woocommerce_store_address_2', '' );
-		$city      = get_option( 'woocommerce_store_city', '' );
-		$postcode  = get_option( 'woocommerce_store_postcode', '' );
-		$raw_cc    = get_option( 'woocommerce_default_country', '' );
-		$cc        = $raw_cc ? explode( ':', $raw_cc )[0] : '';
-		$country   = $cc;
+		return array(
+			'name'    => '' !== $name ? $name : $defaults['name'],
+			'address' => '' !== $address ? $address : $defaults['address'],
+			'email'   => '' !== $email ? $email : $defaults['email'],
+			'phone'   => $phone,
+		);
+	}
+
+	private function save_trader_data( array $trader_data ): void {
+		foreach ( array( 'name', 'address', 'email', 'phone' ) as $key ) {
+			$this->save_option( 'trader_' . $key, (string) ( $trader_data[ $key ] ?? '' ) );
+		}
+	}
+
+	private function get_trader_data(): array {
+		$defaults = $this->get_trader_defaults();
+		$data     = array();
+
+		foreach ( array( 'name', 'address', 'email', 'phone' ) as $key ) {
+			$value        = (string) $this->get_option( 'trader_' . $key, '' );
+			$data[ $key ] = '' !== $value ? $value : $defaults[ $key ];
+		}
+
+		return $data;
+	}
+
+	private function get_trader_defaults(): array {
+		$name     = (string) get_bloginfo( 'name' );
+		$addr1    = (string) get_option( 'woocommerce_store_address', '' );
+		$addr2    = (string) get_option( 'woocommerce_store_address_2', '' );
+		$city     = (string) get_option( 'woocommerce_store_city', '' );
+		$postcode = (string) get_option( 'woocommerce_store_postcode', '' );
+		$raw_cc   = (string) get_option( 'woocommerce_default_country', '' );
+		$cc       = '' !== $raw_cc ? explode( ':', $raw_cc )[0] : '';
+		$country  = $cc;
+
 		if ( $cc && function_exists( 'WC' ) && WC() && WC()->countries ) {
 			$countries = WC()->countries->get_countries();
 			$country   = $countries[ $cc ] ?? $cc;
 		}
-		$email     = get_option( 'woocommerce_email_from_address', '' )
-					?: get_option( 'admin_email', '' );
 
-		// Compone indirizzo su una riga; lascia placeholder solo se mancante.
-		$addr_parts = array_filter( [
-			$addr1,
-			$addr2,
-			trim( $postcode . ' ' . $city ),
-			$country,
-		] );
-		$address = $addr_parts ? implode( ', ', $addr_parts ) : '[INDIRIZZO COMPLETO]';
-		$email   = $email ?: '[EMAIL ASSISTENZA]';
+		$email = (string) get_option( 'woocommerce_email_from_address', '' );
+		$email = '' !== $email ? $email : (string) get_option( 'admin_email', '' );
+
+		$address = implode(
+			"\n",
+			array_filter(
+				array(
+					$addr1,
+					$addr2,
+					trim( $postcode . ' ' . $city ),
+					$country,
+				)
+			)
+		);
+
+		return array(
+			'name'    => '' !== $name ? $name : '',
+			'address' => $address,
+			'email'   => $email,
+			'phone'   => (string) get_option( 'woocommerce_store_phone', '' ),
+		);
+	}
+
+	// -------------------------------------------------------------------------
+	// Contenuto default pagina informativa
+	// -------------------------------------------------------------------------
+
+	private function get_default_page_content( ?array $trader_data = null ): string {
+		if ( null === $trader_data ) {
+			$trader_data = $this->get_trader_data();
+		}
+		$date    = date_i18n( get_option( 'date_format' ) );
+		$site    = esc_html( (string) ( $trader_data['name'] ?? get_bloginfo( 'name' ) ) );
+		$address = (string) ( $trader_data['address'] ?? '' );
+		$email   = sanitize_email( (string) ( $trader_data['email'] ?? '' ) );
+		$phone   = sanitize_text_field( (string) ( $trader_data['phone'] ?? '' ) );
+
+		$vendor_lines = array( '<strong>' . $site . '</strong>' );
+		if ( '' !== $address ) {
+			$vendor_lines[] = 'Sede legale: ' . nl2br( esc_html( $address ) );
+		}
+		if ( '' !== $email ) {
+			$vendor_lines[] = 'Email: ' . esc_html( $email );
+		}
+		if ( '' !== $phone ) {
+			$vendor_lines[] = 'Telefono: ' . esc_html( $phone );
+		}
+
+		$vendor_block   = implode( "<br>\n", $vendor_lines );
+		$address_inline = trim( preg_replace( '/\s+/', ' ', str_replace( array( "\r", "\n" ), ', ', $address ) ) );
+		$email_item     = '' !== $email ? '<li>Inviando una dichiarazione scritta a: <strong>' . esc_html( $email ) . '</strong>;</li>' : '';
+		$mail_item      = '' !== $address_inline ? '<li>Tramite raccomandata A/R a: <strong>' . esc_html( $address_inline ) . '</strong>.</li>' : '';
 
 		return "<!-- wp:paragraph -->
 <p><strong>Informativa sul Diritto di Recesso</strong><br>
@@ -591,10 +745,7 @@ Ai sensi degli artt. 49&#x2013;59 del D.Lgs. 206/2005 (Codice del Consumo), come
 <!-- /wp:heading -->
 
 <!-- wp:paragraph -->
-<p><strong>{$site}</strong><br>
-Sede legale: {$address}<br>
-Email: {$email}<br>
-Telefono: [NUMERO DI TELEFONO]</p>
+<p>{$vendor_block}</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:heading {\"level\":3} -->
@@ -613,11 +764,19 @@ Telefono: [NUMERO DI TELEFONO]</p>
 <h3>Come esercitare il diritto di recesso</h3>
 <!-- /wp:heading -->
 
+<!-- wp:paragraph -->
+<p>Puoi inviare la richiesta direttamente dall'area cliente del sito. La procedura digitale registra la richiesta e invia una ricevuta via email.</p>
+<!-- /wp:paragraph -->
+
+<!-- wp:shortcode -->
+[wlr_withdrawal_link label=\"Vai all'area Resi e Recesso\"]
+<!-- /wp:shortcode -->
+
 <!-- wp:list -->
 <ul>
-<li>Tramite la <strong>funzione digitale di recesso</strong> disponibile nell&#x27;area personale del sito (Ordini &rarr; Recedere dal contratto) &#x2014; riceverai conferma immediata via email;</li>
-<li>Inviando una dichiarazione scritta a: <strong>{$email}</strong>;</li>
-<li>Tramite raccomandata A/R a: <strong>{$address}</strong>.</li>
+<li>Tramite la <strong>funzione digitale di recesso</strong> disponibile dal pulsante sopra o dalla sezione Resi &amp; Recesso del tuo account;</li>
+{$email_item}
+{$mail_item}
 </ul>
 <!-- /wp:list -->
 
@@ -634,7 +793,7 @@ Telefono: [NUMERO DI TELEFONO]</p>
 <!-- /wp:heading -->
 
 <!-- wp:paragraph -->
-<p>Dovrai restituire i beni a <strong>{$address}</strong> entro 14 giorni dalla comunicazione di recesso. I costi diretti di restituzione sono a tuo carico, salvo diversa indicazione.</p>
+<p>Dovrai restituire i beni all'indirizzo indicato dal venditore entro 14 giorni dalla comunicazione di recesso. I costi diretti di restituzione sono a tuo carico, salvo diversa indicazione.</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:heading {\"level\":3} -->
@@ -653,5 +812,11 @@ Telefono: [NUMERO DI TELEFONO]</p>
 <!-- wp:paragraph -->
 <p><em>Aggiornato: {$date} &mdash; D.Lgs. 209/2025 (art. 54-bis Codice del Consumo)</em></p>
 <!-- /wp:paragraph -->";
+	}
+
+	private function log_error( string $message ): void {
+		if ( function_exists( 'wc_get_logger' ) ) {
+			wc_get_logger()->error( $message, array( 'source' => 'woo-legal-returns' ) );
+		}
 	}
 }

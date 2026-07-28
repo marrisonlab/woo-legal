@@ -10,12 +10,21 @@ defined( 'ABSPATH' ) || exit;
 do_action( 'woocommerce_email_header', __( 'Richiesta di reso ricevuta', 'woo-legal-returns' ), null );
 ?>
 
-<p><?php printf( esc_html__( 'Gentile %s,', 'woo-legal-returns' ), esc_html( $customer->display_name ) ); ?></p>
+<p>
+	<?php
+	printf(
+		/* translators: %s: customer display name. */
+		esc_html__( 'Gentile %s,', 'woo-legal-returns' ),
+		esc_html( $customer->display_name )
+	);
+	?>
+</p>
 
 <p>
 	<?php
 	printf(
-		esc_html__( 'Abbiamo ricevuto la tua richiesta di recesso per l\'ordine #%s. La tua richiesta è stata registrata con il numero #%d.', 'woo-legal-returns' ),
+		/* translators: 1: order number, 2: return request ID. */
+		esc_html__( 'Abbiamo ricevuto la tua richiesta di recesso per l\'ordine #%1$s. La tua richiesta è stata registrata con il numero #%2$d.', 'woo-legal-returns' ),
 		esc_html( $order->get_order_number() ),
 		(int) $return_id
 	);
@@ -61,25 +70,27 @@ do_action( 'woocommerce_email_header', __( 'Richiesta di reso ricevuta', 'woo-le
 	<p>
 		<?php
 		printf(
-			esc_html__( 'La presente email conferma che %s ha esercitato il diritto di recesso dal contratto di vendita relativo all\'ordine n. %s.', 'woo-legal-returns' ),
-			'<strong>' . esc_html( $customer->display_name ) . '</strong>',
-			'<strong>#' . esc_html( $order->get_order_number() ) . '</strong>'
+			/* translators: 1: customer display name, 2: order number. */
+			wp_kses_post( __( 'La presente email conferma che <strong>%1$s</strong> ha esercitato il diritto di recesso dal contratto di vendita relativo all\'ordine n. <strong>#%2$s</strong>.', 'woo-legal-returns' ) ),
+			esc_html( $customer->display_name ),
+			esc_html( $order->get_order_number() )
 		);
 		?>
 	</p>
 
 	<?php
-	$order_items_by_id = [];
+	$order_items_by_id = array();
 	foreach ( $order->get_items() as $item_id => $item ) {
 		$order_items_by_id[ $item_id ] = $item->get_name();
 	}
 	if ( ! empty( $items ) ) :
-	?>
+		?>
 	<p><strong><?php esc_html_e( 'Prodotti oggetto del recesso:', 'woo-legal-returns' ); ?></strong></p>
 	<ul style="margin:0 0 12px 20px;padding:0;">
-		<?php foreach ( $items as $ri ) :
+		<?php
+		foreach ( $items as $ri ) :
 			$item_name = $order_items_by_id[ $ri['item_id'] ] ?? ( '#' . $ri['item_id'] );
-		?>
+			?>
 		<li><?php echo esc_html( $item_name ) . ' &times; ' . (int) $ri['qty']; ?></li>
 		<?php endforeach; ?>
 	</ul>
@@ -98,6 +109,12 @@ do_action( 'woocommerce_email_header', __( 'Richiesta di reso ricevuta', 'woo-le
 			<td style="padding:4px 8px 4px 0;color:#555;"><strong><?php esc_html_e( 'Numero richiesta:', 'woo-legal-returns' ); ?></strong></td>
 			<td style="padding:4px 0;">#<?php echo esc_html( $return_id ); ?></td>
 		</tr>
+		<?php if ( ! empty( $receipt_hash ) ) : ?>
+		<tr>
+			<td style="padding:4px 8px 4px 0;color:#555;"><strong><?php esc_html_e( 'Hash ricevuta:', 'woo-legal-returns' ); ?></strong></td>
+			<td style="padding:4px 0;font-family:monospace;"><?php echo esc_html( $receipt_hash ); ?></td>
+		</tr>
+		<?php endif; ?>
 	</table>
 
 	<p style="margin-bottom:0;font-size:12px;color:#666;border-top:1px solid #e5e5e5;padding-top:10px;margin-top:12px;">

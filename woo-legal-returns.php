@@ -3,7 +3,7 @@
  * Plugin Name:       Woo Legal Returns – EU Directive
  * Plugin URI:        https://github.com/marrisonlab/woo-legal
  * Description:       Adegua WooCommerce alla Direttiva UE sui Diritti dei Consumatori: modulo di recesso standardizzato, gestione richieste di reso nell'area cliente, notifiche email e dashboard admin.
- * Version:           1.3.1
+ * Version:           1.4.0
  * Author:            Marrisonlab
  * Author URI:        https://marrisonlab.com
  * Text Domain:       woo-legal-returns
@@ -13,16 +13,18 @@
  * WC requires at least: 7.0
  * WC tested up to:   9.0
  * License:           GPL-2.0-or-later
+ *
+ * @package Woo_Legal_Returns
  */
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WLR_VERSION',          '1.3.1' );
-define( 'WLR_PLUGIN_FILE',      __FILE__ );
-define( 'WLR_PLUGIN_BASENAME',  plugin_basename( __FILE__ ) );
-define( 'WLR_PLUGIN_DIR',       plugin_dir_path( __FILE__ ) );
-define( 'WLR_PLUGIN_URL',       plugin_dir_url( __FILE__ ) );
-define( 'WLR_RETURN_DAYS',      14 ); // Diritto di recesso: 14 giorni
+define( 'WLR_VERSION', '1.4.0' );
+define( 'WLR_PLUGIN_FILE', __FILE__ );
+define( 'WLR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
+define( 'WLR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+define( 'WLR_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+define( 'WLR_RETURN_DAYS', 14 ); // Diritto di recesso: 14 giorni.
 
 /**
  * Verifica dipendenze prima di caricare il plugin.
@@ -56,13 +58,19 @@ function wlr_init(): void {
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-emails.php';
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-admin.php';
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-product-settings.php';
+	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-checkout-consent.php';
+	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-privacy.php';
+	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-annex-form.php';
 	WLR_Post_Type::instance();
 	WLR_Customer_Account::instance();
 	WLR_Emails::instance();
 	WLR_Admin::instance();
 	WLR_Product_Settings::instance();
+	WLR_Checkout_Consent::instance();
+	WLR_Privacy::instance();
+	WLR_Annex_Form::instance();
 
-	// Carica il wizard solo nell'admin
+	// Carica il wizard solo nell'admin.
 	if ( is_admin() ) {
 		require_once WLR_PLUGIN_DIR . 'includes/class-wlr-setup-wizard.php';
 		WLR_Setup_Wizard::instance();
@@ -84,6 +92,9 @@ require_once plugin_dir_path( __FILE__ ) . 'includes/class-wlr-github-updater.ph
 function wlr_activate(): void {
 	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-post-type.php';
 	WLR_Post_Type::register_post_type();
+	require_once WLR_PLUGIN_DIR . 'includes/class-wlr-customer-account.php';
+	WLR_Customer_Account::instance()->add_endpoint();
+	WLR_Customer_Account::ensure_withdrawal_page();
 	flush_rewrite_rules();
 }
 register_activation_hook( __FILE__, 'wlr_activate' );

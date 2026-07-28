@@ -46,6 +46,10 @@
 	margin-bottom: 20px;
 }
 
+.wlr-account-returns .wlr-new-return-action {
+	margin: 0 0 18px;
+}
+
 .wlr-btn-primary {
 	background: #0073aa !important;
 	color: #fff !important;
@@ -70,6 +74,10 @@
 	font-size: 13px;
 }
 .wlr-back-link:hover { text-decoration: underline; }
+
+.wlr-load-order-items {
+	margin-top: 8px !important;
+}
 
 .wlr-legal-notice {
 	background: #fffbf0;
@@ -173,3 +181,37 @@
 	border-radius: 4px;
 }
 .wlr-withdrawal-notice h3 { margin-top: 0; }
+
+.wlr-confirmation-box,
+.wlr-checkout-consents,
+.wlr-excluded-product-notice {
+	border: 1px solid #dcdcde;
+	border-left: 4px solid #2271b1;
+	background: #f8fbfd;
+	padding: 14px 16px;
+	margin: 18px 0;
+}
+
+.wlr-confirmation-box h4 {
+	font-weight: 700;
+	margin: 0 0 10px;
+}
+
+.wlr-confirmation-table {
+	width: 100%;
+	border-collapse: collapse;
+	margin: 10px 0;
+}
+
+.wlr-confirmation-table th,
+.wlr-confirmation-table td {
+	border-bottom: 1px solid #e5e5e5;
+	padding: 6px 0;
+	text-align: left;
+	vertical-align: top;
+}
+
+.wlr-excluded-product-notice {
+	border-left-color: #b32d2e;
+	background: #fff8f8;
+}

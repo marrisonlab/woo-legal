@@ -3,6 +3,7 @@
  * Template: Avviso diritto di recesso nella thank-you page.
  *
  * Variabili disponibili:
+ *
  * @var WC_Order $order
  * @var int      $return_days
  * @var string   $return_url
@@ -20,7 +21,7 @@ defined( 'ABSPATH' ) || exit;
 		printf(
 			/* translators: 1: numero giorni */
 			esc_html__( 'Hai %d giorni di tempo dalla ricezione dei beni per esercitare il diritto di recesso, senza dover fornire alcuna motivazione (Direttiva UE 2011/83/UE come modificata dalla Direttiva 2023/2673, recepita con D.Lgs. 209/2025 – art. 54-bis Codice del Consumo).', 'woo-legal-returns' ),
-			$return_days
+			(int) $return_days
 		);
 		?>
 	</p>
