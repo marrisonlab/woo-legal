@@ -26,11 +26,11 @@ do_action( 'woocommerce_email_header', __( 'Nuova richiesta di reso', 'woo-legal
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Ordine', 'woo-legal-returns' ); ?></th>
-		<td style="border:1px solid #e5e5e5;">#<?php echo esc_html( $order->get_order_number() ); ?></td>
+		<td style="border:1px solid #e5e5e5;">#<?php echo esc_html( $order_number ); ?></td>
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Totale ordine', 'woo-legal-returns' ); ?></th>
-		<td style="border:1px solid #e5e5e5;"><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></td>
+		<td style="border:1px solid #e5e5e5;"><?php echo $order ? wp_kses_post( $order->get_formatted_order_total() ) : '—'; ?></td>
 	</tr>
 	<tr>
 		<th style="text-align:left;border:1px solid #e5e5e5;"><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th>

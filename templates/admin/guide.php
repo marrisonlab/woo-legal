@@ -82,7 +82,7 @@ defined( 'ABSPATH' ) || exit;
 			</ul>
 
 			<p style="background: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 3px;">
-				<?php esc_html_e( 'Nota importante: I prodotti virtuali e scaricabili sono automaticamente esclusi dal plugin e non compaiono nel form di reso.', 'woo-legal-returns' ); ?>
+				<?php esc_html_e( 'Prodotti virtuali e scaricabili seguono le regole acquistate. Le eccezioni condizionali richiedono consenso e fatti verificati nell’ordine: inizio dell’esecuzione digitale, completamento del servizio o apertura del sigillo.', 'woo-legal-returns' ); ?>
 			</p>
 		</div>
 
@@ -107,7 +107,7 @@ defined( 'ABSPATH' ) || exit;
 					<br><?php esc_html_e( 'Se decidi di accettare la richiesta, cambia lo stato in Accettata. Questo:', 'woo-legal-returns' ); ?>
 					<ul style="margin-top: 8px; margin-bottom: 8px;">
 						<li><?php esc_html_e( 'Invia automaticamente una email al cliente confermando l\'accettazione.', 'woo-legal-returns' ); ?></li>
-						<li><?php esc_html_e( 'Sposta l\'ordine WooCommerce in stato In sospeso (on-hold) per bloccare ulteriori elaborazioni.', 'woo-legal-returns' ); ?></li>
+						<li><?php esc_html_e( 'Conserva lo stato dell’ordine WooCommerce, anche in caso di recesso parziale.', 'woo-legal-returns' ); ?></li>
 					</ul>
 				</li>
 				<li>
@@ -119,7 +119,7 @@ defined( 'ABSPATH' ) || exit;
 					<br><?php esc_html_e( 'Dopo aver emesso il rimborso in WooCommerce, torna nella lista Resi UE, apri la richiesta e cambia lo stato in Rimborsata. Questo:', 'woo-legal-returns' ); ?>
 					<ul style="margin-top: 8px; margin-bottom: 8px;">
 						<li><?php esc_html_e( 'Invia una email al cliente confermando che il rimborso è stato effettuato.', 'woo-legal-returns' ); ?></li>
-						<li><?php esc_html_e( 'Sposta l\'ordine WooCommerce in stato Rimborsato (refunded).', 'woo-legal-returns' ); ?></li>
+						<li><?php esc_html_e( 'Con sincronizzazione opzionale attiva, aggiorna l’ordine a Rimborsato soltanto quando WooCommerce conferma il rimborso dell’intero importo.', 'woo-legal-returns' ); ?></li>
 					</ul>
 				</li>
 			</ol>

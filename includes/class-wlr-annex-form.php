@@ -21,7 +21,6 @@ class WLR_Annex_Form {
 
 	private function hooks(): void {
 		add_shortcode( 'wlr_model_withdrawal_form', array( $this, 'shortcode' ) );
-		add_filter( 'the_content', array( $this, 'remove_legacy_model_form_section' ), 8 );
 	}
 
 	public function shortcode( $atts = array() ): string {
@@ -29,29 +28,21 @@ class WLR_Annex_Form {
 		$atts = shortcode_atts( array(), $atts, 'wlr_model_withdrawal_form' );
 		unset( $atts );
 
-		return '';
+		$options = get_option( 'wlr_setup_options', array() );
+		$trader  = implode( ', ', array_filter( array( $options['trader_name'] ?? get_bloginfo( 'name' ), $options['trader_address'] ?? get_option( 'woocommerce_store_address', '' ), $options['trader_email'] ?? get_option( 'woocommerce_email_from_address', get_option( 'admin_email' ) ) ) ) );
+		return '<div class="wlr-model-withdrawal-form"><h3>' . esc_html__( 'Modulo tipo di recesso', 'woo-legal-returns' ) . '</h3><p>' .
+			esc_html__( 'Compilare e restituire questo modulo solo se si desidera recedere dal contratto.', 'woo-legal-returns' ) . '</p><p>' .
+			esc_html__( 'Destinatario:', 'woo-legal-returns' ) . ' ' . esc_html( $trader ) . '</p><p>' .
+			esc_html__( 'Con la presente io/noi (*) notifico/notifichiamo (*) il recesso dal mio/nostro (*) contratto di vendita dei seguenti beni (*) / fornitura del seguente servizio (*):', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( 'Ordinato il (*) / ricevuto il (*):', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( 'Nome del/dei consumatore/i:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( 'Indirizzo del/dei consumatore/i:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( 'Firma del/dei consumatore/i (solo per modulo cartaceo):', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( 'Data:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
+			esc_html__( '(*) Cancellare la dicitura inutile.', 'woo-legal-returns' ) . '</p></div>';
 	}
 
 	public function remove_legacy_model_form_section( string $content ): string {
-		if (
-			false === strpos( $content, 'wlr_model_withdrawal_form' )
-			&& false === stripos( $content, 'Modulo tipo di recesso' )
-			&& false === stripos( $content, 'Fac-simile del modulo tipo di recesso' )
-		) {
-			return $content;
-		}
-
-		$heading_text = '(?:Modulo tipo di recesso|Fac-simile del modulo tipo di recesso)';
-		$shortcode    = '\[wlr_model_withdrawal_form[^\]]*\]';
-		$patterns     = array(
-			'/<!-- wp:heading[^>]*-->\s*<h[1-6][^>]*>' . $heading_text . '<\/h[1-6]>\s*<!-- \/wp:heading -->\s*(?:<!-- wp:paragraph -->.*?<!-- \/wp:paragraph -->\s*)?<!-- wp:shortcode -->\s*' . $shortcode . '\s*<!-- \/wp:shortcode -->/is',
-			'/<h[1-6][^>]*>' . $heading_text . '<\/h[1-6]>\s*(?:<p>.*?<\/p>\s*)?' . $shortcode . '/is',
-			'/<!-- wp:shortcode -->\s*' . $shortcode . '\s*<!-- \/wp:shortcode -->/i',
-			'/' . $shortcode . '/i',
-		);
-
-		$clean = preg_replace( $patterns, '', $content );
-
-		return is_string( $clean ) ? $clean : $content;
+		return $content;
 	}
 }

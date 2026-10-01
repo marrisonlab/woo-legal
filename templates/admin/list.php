@@ -63,6 +63,7 @@ $total_pages  = ceil( $total / $wlr_per_page );
 			<?php echo array_key_last( WLR_Post_Type::STATUSES ) !== $slug ? ' | ' : ''; ?>
 		</li>
 		<?php endforeach; ?>
+		<li> | <a href="<?php echo esc_url( admin_url( 'admin.php?page=wlr-returns&status=trash' ) ); ?>" class="<?php echo 'trash' === $status_filter ? 'current' : ''; ?>"><?php esc_html_e( 'Cestino', 'woo-legal-returns' ); ?></a></li>
 	</ul>
 
 	<!-- Ricerca -->

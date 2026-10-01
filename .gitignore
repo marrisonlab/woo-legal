@@ -1,4 +1,0 @@
-vendor/
-tools/composer.phar
-tools/php-cli.ini
-.phpcs-cache

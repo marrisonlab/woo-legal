@@ -17,6 +17,7 @@
   },
   "scripts": {
     "phpcs": "phpcs --standard=phpcs.xml.dist",
-    "phpcbf": "phpcbf --standard=phpcs.xml.dist"
+    "phpcbf": "phpcbf --standard=phpcs.xml.dist",
+    "test": "php tests/regression.php"
   }
 }

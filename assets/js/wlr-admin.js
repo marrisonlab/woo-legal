@@ -30,6 +30,7 @@
 
 				if ( response.success ) {
 					$msg.addClass( 'success' ).text( response.data.message );
+					window.location.reload();
 
 					// Aggiorna il badge stato in pagina senza ricaricare.
 					var $badge = $( '.wlr-badge' ).first();

@@ -192,6 +192,32 @@
 	margin: 18px 0;
 }
 
+.wlr-return-form-wrap input[type="text"],
+.wlr-return-form-wrap input[type="email"],
+.wlr-return-form-wrap select,
+.wlr-return-form-wrap textarea {
+	max-width: 100%;
+}
+.wlr-return-form-wrap :focus-visible {
+	outline: 2px solid #2271b1;
+	outline-offset: 3px;
+}
+#wlr-items-container {
+	overflow-x: auto;
+}
+.wlr-items-table input[type="checkbox"] {
+	min-width: 20px;
+	min-height: 20px;
+}
+@media (max-width: 600px) {
+	.wlr-return-form-wrap { padding: 12px; }
+	.wlr-confirmation-table th,
+	.wlr-confirmation-table td { display: block; width: auto; overflow-wrap: anywhere; }
+}
+@media print {
+	.wlr-model-withdrawal-form { color: #000; background: #fff; break-inside: avoid; }
+}
+
 .wlr-confirmation-box h4 {
 	font-weight: 700;
 	margin: 0 0 10px;

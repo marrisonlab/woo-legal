@@ -68,6 +68,7 @@ class WLR_GitHub_Updater {
 				'requires_php' => '8.0',
 			);
 		} else {
+			unset( $transient->response[ $this->plugin_basename ] );
 			$transient->no_update[ $this->plugin_basename ] = (object) array(
 				'slug'        => $this->plugin_slug,
 				'plugin'      => $this->plugin_basename,
@@ -157,7 +158,10 @@ class WLR_GitHub_Updater {
 		global $wp_filesystem;
 
 		if ( ! $wp_filesystem ) {
-			return $source;
+			return new WP_Error( 'wlr_filesystem_unavailable', __( 'Filesystem non disponibile: impossibile verificare la cartella del plugin.', 'woo-legal-returns' ) );
+		}
+		if ( ! $wp_filesystem->exists( trailingslashit( $source ) . 'woo-legal-returns.php' ) ) {
+			return new WP_Error( 'wlr_invalid_package', __( 'Il pacchetto non contiene il file principale di Woo Legal Returns.', 'woo-legal-returns' ) );
 		}
 
 		if ( $wp_filesystem->move( $source, $corrected ) ) {
@@ -185,11 +189,11 @@ class WLR_GitHub_Updater {
 	 * @return array|null Dati release o null in caso di errore.
 	 */
 	private function get_latest_release(): ?array {
-		$cache_key = 'wlr_github_latest_release';
+		$cache_key = 'wlr_github_release_' . WLR_VERSION;
 		$cached    = get_transient( $cache_key );
 
 		if ( false !== $cached ) {
-			return ! empty( $cached ) ? $cached : null;
+			return is_array( $cached ) && $this->is_valid_release( $cached ) ? $cached : null;
 		}
 
 		$url      = sprintf(
@@ -215,7 +219,7 @@ class WLR_GitHub_Updater {
 
 		$data = json_decode( wp_remote_retrieve_body( $response ), true );
 
-		if ( empty( $data['tag_name'] ) ) {
+		if ( ! is_array( $data ) || ! $this->is_valid_release( $data ) ) {
 			set_transient( $cache_key, array(), 5 * MINUTE_IN_SECONDS );
 			return null;
 		}
@@ -223,5 +227,13 @@ class WLR_GitHub_Updater {
 		set_transient( $cache_key, $data, HOUR_IN_SECONDS );
 
 		return $data;
+	}
+
+	private function is_valid_release( array $data ): bool {
+		$tag = $data['tag_name'] ?? '';
+		$url = $data['zipball_url'] ?? '';
+		return is_string( $tag ) && (bool) preg_match( '/^[vV]?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/', $tag )
+			&& is_string( $url ) && 'https' === wp_parse_url( $url, PHP_URL_SCHEME )
+			&& in_array( wp_parse_url( $url, PHP_URL_HOST ), array( 'api.github.com', 'github.com', 'codeload.github.com' ), true );
 	}
 }

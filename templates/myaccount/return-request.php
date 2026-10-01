@@ -16,6 +16,9 @@
 defined( 'ABSPATH' ) || exit;
 
 $allow_guest_lookup = ! empty( $allow_guest_lookup );
+$order_pages        = $order_pages ?? 1;
+// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only pagination.
+$order_page = max( 1, absint( wp_unslash( $_GET['wlr_orders_page'] ?? 1 ) ) );
 ?>
 
 <div class="wlr-return-form-wrap">
@@ -27,6 +30,43 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 	</p>
 
 	<h3><?php esc_html_e( 'Modulo di Recesso – Direttiva UE Diritti dei Consumatori', 'woo-legal-returns' ); ?></h3>
+	<noscript><p><?php esc_html_e( 'La funzione digitale richiede JavaScript. Puoi usare il modulo tipo stampabile o inviare una dichiarazione al venditore tramite i contatti indicati nell’informativa sul recesso.', 'woo-legal-returns' ); ?></p></noscript>
+	<?php if ( $order_pages > 1 && ! $is_guest ) : ?>
+	<nav aria-label="<?php esc_attr_e( 'Pagine degli ordini', 'woo-legal-returns' ); ?>">
+		<?php
+		if ( $order_page > 1 ) :
+			?>
+			<a class="button" href="
+			<?php
+			echo esc_url(
+				add_query_arg(
+					array(
+						'nuovo'           => 1,
+						'wlr_orders_page' => $order_page - 1,
+					),
+					wc_get_account_endpoint_url( WLR_Customer_Account::ENDPOINT )
+				)
+			);
+			?>
+			"><?php esc_html_e( 'Ordini più recenti', 'woo-legal-returns' ); ?></a><?php endif; ?>
+		<?php
+		if ( $order_page < $order_pages ) :
+			?>
+			<a class="button" href="
+			<?php
+			echo esc_url(
+				add_query_arg(
+					array(
+						'nuovo'           => 1,
+						'wlr_orders_page' => $order_page + 1,
+					),
+					wc_get_account_endpoint_url( WLR_Customer_Account::ENDPOINT )
+				)
+			);
+			?>
+			"><?php esc_html_e( 'Ordini precedenti', 'woo-legal-returns' ); ?></a><?php endif; ?>
+	</nav>
+	<?php endif; ?>
 
 	<div class="wlr-legal-notice">
 		<p>
@@ -34,7 +74,7 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 			<?php
 			printf(
 				/* translators: 1: giorni 2: blog name */
-				esc_html__( 'Ai sensi della Direttiva UE 2011/83/UE come modificata dalla Direttiva 2023/2673 (D.Lgs. 209/2025, art. 54-bis Codice del Consumo), hai il diritto di recedere dal presente contratto entro %1$d giorni dalla ricezione dei beni, senza dover fornire alcuna giustificazione. Per esercitare il diritto di recesso, compila il presente modulo online. Riceverai una ricevuta di ricezione immediata via email.', 'woo-legal-returns' ),
+				esc_html__( 'Puoi esercitare il diritto di recesso senza fornire una giustificazione. Il termine ordinario è di %1$d giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali, salvo le eccezioni previste dalla normativa. Dopo la conferma finale registriamo la dichiarazione e inviamo una ricevuta via email.', 'woo-legal-returns' ),
 				(int) WLR_RETURN_DAYS,
 				'<strong>' . esc_html( get_bloginfo( 'name' ) ) . '</strong>'
 			);
@@ -80,7 +120,7 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 						: __( 'da verificare', 'woo-legal-returns' );
 					$option_text   = sprintf(
 						/* translators: 1: order number, 2: total, 3: deadline date. */
-						__( '#%1$s - %2$s (recesso entro il %3$s)', 'woo-legal-returns' ),
+						! empty( $deadline['reliable'] ) ? __( '#%1$s - %2$s (termine verificato: %3$s)', 'woo-legal-returns' ) : __( '#%1$s - %2$s (termine indicativo: %3$s)', 'woo-legal-returns' ),
 						$return_order->get_order_number(),
 						wp_strip_all_tags( $return_order->get_formatted_order_total() ),
 						$deadline_text
@@ -105,10 +145,10 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 		<!-- Motivo principale -->
 		<p class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 			<label for="wlr_reason">
-				<?php esc_html_e( 'Motivo del recesso', 'woo-legal-returns' ); ?> <abbr class="required" title="required">*</abbr>
+				<?php esc_html_e( 'Motivo del recesso (facoltativo)', 'woo-legal-returns' ); ?>
 			</label>
-			<select name="reason" id="wlr_reason" class="woocommerce-Input" required>
-				<option value=""><?php esc_html_e( '— Seleziona il motivo —', 'woo-legal-returns' ); ?></option>
+			<select name="reason" id="wlr_reason" class="woocommerce-Input">
+				<option value=""><?php esc_html_e( 'Nessuna motivazione', 'woo-legal-returns' ); ?></option>
 				<?php foreach ( $reasons as $key => $label ) : ?>
 					<option value="<?php echo esc_attr( $key ); ?>"><?php echo esc_html( $label ); ?></option>
 				<?php endforeach; ?>
@@ -127,6 +167,8 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 		<?php $wlr_current_user = wp_get_current_user(); ?>
 		<div class="wlr-requester-info">
 			<h4><?php esc_html_e( 'Dati del richiedente', 'woo-legal-returns' ); ?></h4>
+			<p><label for="wlr_customer_name"><?php esc_html_e( 'Nome e cognome', 'woo-legal-returns' ); ?> *</label>
+			<input type="text" id="wlr_customer_name" name="customer_name" required maxlength="200" autocomplete="name" value="<?php echo esc_attr( $is_guest ? '' : $wlr_current_user->display_name ); ?>"></p>
 			<?php if ( $is_guest ) : ?>
 			<p class="woocommerce-form-row woocommerce-form-row--wide form-row form-row-wide">
 				<label for="wlr_guest_email">
@@ -149,16 +191,9 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 			<p>
 				<strong><?php esc_html_e( 'Dichiarazione di recesso', 'woo-legal-returns' ); ?></strong><br>
 				<?php
-				$display_name = $is_guest ? __( '[nome del consumatore]', 'woo-legal-returns' ) : $wlr_current_user->display_name;
-				printf(
-					/* translators: 1: consumer name, 2: current date. */
-					esc_html__( 'Io/Noi (*) Vi notifico/notichiamo (*) con la presente di recedere dal mio/nostro (*) contratto di vendita dei seguenti beni (*) / fornitura del seguente servizio (*). Ricevuto il (*): [data ordine]. Nome del consumatore: %1$s. Firma (solo in caso di notifica su supporto cartaceo): ___________. Data: %2$s.', 'woo-legal-returns' ),
-					esc_html( $display_name ),
-					esc_html( date_i18n( get_option( 'date_format' ) ) )
-				);
+				echo esc_html( WLR_Post_Type::get_declaration_text() );
 				?>
 			</p>
-			<p><small><?php esc_html_e( '(*) Cancellare la dicitura inutile.', 'woo-legal-returns' ); ?></small></p>
 		</div>
 
 		<p>
@@ -177,7 +212,7 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 			</button>
 		</p>
 
-		<div id="wlr-form-messages" style="display:none;"></div>
+		<div id="wlr-form-messages" role="status" aria-live="polite" tabindex="-1" style="display:none;"></div>
 
 	</form>
 
@@ -189,7 +224,7 @@ $allow_guest_lookup = ! empty( $allow_guest_lookup );
 				<tr>
 					<th><?php esc_html_e( 'Seleziona', 'woo-legal-returns' ); ?></th>
 					<th><?php esc_html_e( 'Prodotto', 'woo-legal-returns' ); ?></th>
-					<th><?php esc_html_e( 'Qt. ordinata', 'woo-legal-returns' ); ?></th>
+					<th><?php esc_html_e( 'Qt. disponibile', 'woo-legal-returns' ); ?></th>
 					<th><?php esc_html_e( 'Qt. da rendere', 'woo-legal-returns' ); ?></th>
 				</tr>
 			</thead>

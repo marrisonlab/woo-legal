@@ -23,6 +23,27 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 			<?php esc_html_e( '&larr; Torna all\'elenco', 'woo-legal-returns' ); ?>
 		</a>
 	</h1>
+	<?php if ( 'trash' === $post->post_status ) : ?>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="wlr_restore_return">
+		<input type="hidden" name="return_id" value="<?php echo esc_attr( $return_id ); ?>">
+		<?php wp_nonce_field( 'wlr_restore_return_' . $return_id ); ?>
+		<?php submit_button( __( 'Ripristina richiesta', 'woo-legal-returns' ), 'secondary' ); ?>
+	</form>
+	<?php else : ?>
+	<div class="notice notice-info"><p>
+		<?php echo esc_html( '1' === get_post_meta( $return_id, '_wlr_receipt_sent', true ) ? __( 'Ricevuta affidata al servizio email. La consegna alla casella non è verificabile dal plugin.', 'woo-legal-returns' ) : __( 'Ricevuta email non ancora inviata.', 'woo-legal-returns' ) ); ?>
+		<?php echo esc_html( get_post_meta( $return_id, '_wlr_receipt_last_error', true ) ); ?>
+		<?php /* translators: %d: number of email attempts. */ ?>
+		<?php echo esc_html( sprintf( __( 'Tentativi: %d', 'woo-legal-returns' ), (int) get_post_meta( $return_id, '_wlr_receipt_attempts', true ) ) ); ?>
+	</p>
+	<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+		<input type="hidden" name="action" value="wlr_resend_receipt">
+		<input type="hidden" name="return_id" value="<?php echo esc_attr( $return_id ); ?>">
+		<?php wp_nonce_field( 'wlr_resend_receipt_' . $return_id ); ?>
+		<?php submit_button( __( 'Reinvia ricevuta', 'woo-legal-returns' ), 'secondary', 'submit', false ); ?>
+	</form></div>
+	<?php endif; ?>
 
 	<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only success notice. ?>
 	<?php if ( isset( $_GET['updated'] ) ) : ?>

@@ -26,7 +26,7 @@ do_action( 'woocommerce_email_header', __( 'Aggiornamento richiesta di reso', 'w
 		/* translators: 1: return request ID, 2: order number. */
 		esc_html__( 'La tua richiesta di reso #%1$d per l\'ordine #%2$s è stata aggiornata.', 'woo-legal-returns' ),
 		(int) $return_id,
-		esc_html( $order->get_order_number() )
+		esc_html( $order_number )
 	);
 	?>
 </p>
@@ -49,7 +49,7 @@ do_action( 'woocommerce_email_header', __( 'Aggiornamento richiesta di reso', 'w
 <?php endif; ?>
 
 <?php if ( 'wlr-approved' === $new_status ) : ?>
-<p><?php esc_html_e( 'Provvedi a restituire i prodotti entro 14 giorni. Ti rimborseremo entro 14 giorni dalla ricezione della merce.', 'woo-legal-returns' ); ?></p>
+<p><?php esc_html_e( 'Restituisci i beni entro 14 giorni dalla comunicazione del recesso. Il rimborso è dovuto entro 14 giorni da tale comunicazione; salvo ritiro offerto dal venditore, può essere trattenuto fino al ricevimento dei beni o della prova di spedizione, se precedente.', 'woo-legal-returns' ); ?></p>
 <?php elseif ( 'wlr-refunded' === $new_status ) : ?>
 <p><?php esc_html_e( 'Il rimborso è stato elaborato. I tempi di accredito dipendono dal tuo istituto bancario.', 'woo-legal-returns' ); ?></p>
 <?php endif; ?>

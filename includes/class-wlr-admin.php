@@ -25,6 +25,8 @@ class WLR_Admin {
 		add_action( 'wp_ajax_wlr_update_status', array( $this, 'handle_update_status' ) );
 		add_action( 'admin_post_wlr_update_status', array( $this, 'handle_update_status_post' ) );
 		add_action( 'admin_post_wlr_delete_return', array( $this, 'handle_delete_return' ) );
+		add_action( 'admin_post_wlr_restore_return', array( $this, 'handle_restore_return' ) );
+		add_action( 'admin_post_wlr_resend_receipt', array( $this, 'handle_resend_receipt' ) );
 		add_action( 'admin_post_wlr_export_returns', array( $this, 'handle_export_returns' ) );
 		add_action( 'admin_post_wlr_bulk_update_returns', array( $this, 'handle_bulk_update_returns' ) );
 		add_action( 'admin_post_wlr_save_settings', array( $this, 'handle_save_settings' ) );
@@ -32,6 +34,8 @@ class WLR_Admin {
 		add_action( 'manage_shop_order_posts_custom_column', array( $this, 'render_orders_withdrawal_column' ), 20, 2 );
 		add_filter( 'manage_woocommerce_page_wc-orders_columns', array( $this, 'add_orders_withdrawal_column' ), 20 );
 		add_action( 'manage_woocommerce_page_wc-orders_custom_column', array( $this, 'render_orders_withdrawal_column' ), 20, 2 );
+		add_filter( 'the_posts', array( $this, 'prime_legacy_order_returns' ), 20, 2 );
+		add_filter( 'woocommerce_order_list_table_prepare_items_query_args', array( $this, 'prime_hpos_order_returns' ), PHP_INT_MAX );
 	}
 
 	public function register_menu(): void {
@@ -273,6 +277,7 @@ class WLR_Admin {
 								<option value="completed_or_paid" <?php selected( $deadline_basis, 'completed_or_paid' ); ?>><?php esc_html_e( 'Completamento/pagamento ordine', 'woo-legal-returns' ); ?></option>
 								<option value="created" <?php selected( $deadline_basis, 'created' ); ?>><?php esc_html_e( 'Data creazione ordine', 'woo-legal-returns' ); ?></option>
 							</select>
+							<p class="description"><?php esc_html_e( 'Queste basi producono una stima. Il blocco strict richiede una data attendibile, l’informativa completa e il calendario verificato, registrati nell’ordine.', 'woo-legal-returns' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -323,7 +328,7 @@ class WLR_Admin {
 			'paged'          => $paged,
 		);
 
-		if ( $status_filter && array_key_exists( $status_filter, WLR_Post_Type::STATUSES ) ) {
+		if ( $status_filter && ( array_key_exists( $status_filter, WLR_Post_Type::STATUSES ) || 'trash' === $status_filter ) ) {
 			$query_args['post_status'] = $status_filter;
 		}
 
@@ -362,6 +367,15 @@ class WLR_Admin {
 			);
 		} else {
 			$customer = null;
+		}
+		$saved_name  = (string) get_post_meta( $return_id, '_wlr_customer_name', true );
+		$saved_email = (string) get_post_meta( $return_id, '_wlr_customer_email', true );
+		if ( $saved_email ) {
+			$customer = (object) array(
+				'display_name' => $saved_name ? $saved_name : ( $customer->display_name ?? __( 'Cliente', 'woo-legal-returns' ) ),
+				'user_email'   => $saved_email,
+				'ID'           => $customer_id,
+			);
 		}
 
 		$items_raw               = get_post_meta( $return_id, '_wlr_items', true );
@@ -406,6 +420,24 @@ class WLR_Admin {
 		}
 
 		return $new_columns;
+	}
+
+	public function prime_legacy_order_returns( array $posts, $query ): array {
+		if ( is_admin() && $query->is_main_query() && 'shop_order' === $query->get( 'post_type' ) ) {
+			WLR_Post_Type::prime_order_returns( wp_list_pluck( $posts, 'ID' ) );
+		}
+		return $posts;
+	}
+
+	public function prime_hpos_order_returns( array $args ): array {
+		if ( 'shop_order' !== ( $args['type'] ?? 'shop_order' ) ) {
+			return $args;
+		}
+		$lookup             = $args;
+		$lookup['paginate'] = false;
+		$lookup['return']   = 'ids';
+		WLR_Post_Type::prime_order_returns( wc_get_orders( $lookup ) );
+		return $args;
 	}
 
 	public function render_orders_withdrawal_column( string $column, mixed $order_or_id = null ): void {
@@ -504,11 +536,13 @@ class WLR_Admin {
 			}
 
 			$old_status = $post->post_status;
+			if ( $new_status === $old_status && '' === trim( $note ) ) {
+				continue;
+			}
 			if ( ! WLR_Post_Type::update_status( $return_id, $new_status, $note ) ) {
 				continue;
 			}
 
-			do_action( 'wlr_return_status_changed', $return_id, $new_status, $old_status );
 			++$updated;
 		}
 
@@ -532,7 +566,18 @@ class WLR_Admin {
 			wp_die( esc_html__( 'Richiesta non trovata.', 'woo-legal-returns' ) );
 		}
 
-		wp_trash_post( $return_id );
+		$lock = WLR_Lock::acquire( 'order:' . absint( get_post_meta( $return_id, '_wlr_order_id', true ) ) );
+		if ( is_wp_error( $lock ) ) {
+			wp_die( esc_html( $lock->get_error_message() ) );
+		}
+		try {
+			if ( ! wp_trash_post( $return_id ) ) {
+				wp_die( esc_html__( 'Spostamento nel cestino fallito.', 'woo-legal-returns' ) );
+			}
+			wp_clear_scheduled_hook( 'wlr_retry_receipt', array( $return_id ) );
+		} finally {
+			WLR_Lock::release( $lock );
+		}
 
 		wp_safe_redirect( admin_url( 'admin.php?page=wlr-returns&deleted=1' ) );
 		exit;
@@ -563,19 +608,10 @@ class WLR_Admin {
 				return;
 			}
 
-			$old_status = get_post_field( 'post_status', $return_id );
-
 			$ok = WLR_Post_Type::update_status( $return_id, $new_status, $note );
 			if ( ! $ok ) {
 				wp_send_json_error( array( 'message' => __( 'Aggiornamento fallito.', 'woo-legal-returns' ) ) );
 				return;
-			}
-
-			// Emetti evento per le email (try/catch: errori email non rompono la risposta AJAX).
-			try {
-				do_action( 'wlr_return_status_changed', $return_id, $new_status, $old_status );
-			} catch ( \Throwable $e ) {
-				$this->log_error( 'Errore invio email su wlr_return_status_changed: ' . $e->getMessage() );
 			}
 
 			wp_send_json_success(
@@ -604,13 +640,10 @@ class WLR_Admin {
 		$return_id  = absint( wp_unslash( $_POST['return_id'] ?? 0 ) );
 		$new_status = sanitize_key( wp_unslash( $_POST['status'] ?? '' ) );
 		$note       = sanitize_textarea_field( wp_unslash( $_POST['note'] ?? '' ) );
-		$old_status = get_post_field( 'post_status', $return_id );
 
 		if ( ! WLR_Post_Type::update_status( $return_id, $new_status, $note ) ) {
 			wp_die( esc_html__( 'Aggiornamento fallito. Se rifiuti una richiesta devi indicare una nota per il cliente.', 'woo-legal-returns' ) );
 		}
-
-		do_action( 'wlr_return_status_changed', $return_id, $new_status, $old_status );
 
 		wp_safe_redirect(
 			admin_url( 'admin.php?page=wlr-returns&action=view&id=' . $return_id . '&updated=1' )
@@ -628,9 +661,9 @@ class WLR_Admin {
 		$args = array(
 			'post_type'      => WLR_Post_Type::POST_TYPE,
 			'post_status'    => array_keys( WLR_Post_Type::STATUSES ),
-			'posts_per_page' => -1,
-			'orderby'        => 'date',
-			'order'          => 'DESC',
+			'posts_per_page' => 200, // phpcs:ignore WordPress.WP.PostsPerPage.posts_per_page_posts_per_page -- Bounded streaming export batch.
+			'orderby'        => 'ID',
+			'order'          => 'ASC',
 		);
 
 		$status = sanitize_key( wp_unslash( $_POST['status'] ?? '' ) );
@@ -653,7 +686,6 @@ class WLR_Admin {
 			$args['date_query']      = array( $date_query );
 		}
 
-		$posts       = get_posts( $args );
 		$include_pii = ! empty( $_POST['include_pii'] );
 
 		nocache_headers();
@@ -682,37 +714,43 @@ class WLR_Admin {
 			$columns[] = 'User agent';
 		}
 
-		fputcsv( $output, array_map( array( $this, 'csv_escape' ), $columns ) );
+		fputcsv( $output, array_map( array( $this, 'csv_escape' ), $columns ), ',', '"', '' );
 
-		foreach ( $posts as $post ) {
-			$items      = get_post_meta( $post->ID, '_wlr_items', true );
-			$items      = is_array( $items ) ? $items : array();
-			$item_names = array_map(
-				static fn( $item ) => ( $item['name'] ?? '#' . ( $item['item_id'] ?? '' ) ) . ' x' . (int) ( $item['qty'] ?? 1 ),
-				$items
-			);
+		$args['paged'] = 1;
+		do {
+			$posts = get_posts( $args );
+			foreach ( $posts as $post ) {
+				$items      = get_post_meta( $post->ID, '_wlr_items', true );
+				$items      = is_array( $items ) ? $items : array();
+				$item_names = array_map(
+					static fn( $item ) => ( $item['name'] ?? '#' . ( $item['item_id'] ?? '' ) ) . ' x' . (int) ( $item['qty'] ?? 1 ),
+					$items
+				);
 
-			$row = array(
-				$post->ID,
-				get_post_meta( $post->ID, '_wlr_submitted_at_utc', true ),
-				get_post_meta( $post->ID, '_wlr_order_id', true ),
-				get_post_meta( $post->ID, '_wlr_customer_email', true ),
-				WLR_Post_Type::get_status_label( $post->post_status ),
-				get_post_meta( $post->ID, '_wlr_reason', true ),
-				implode( '; ', $item_names ),
-				get_post_meta( $post->ID, '_wlr_receipt_hash', true ),
-				'1' === get_post_meta( $post->ID, '_wlr_receipt_sent', true ) ? 'yes' : 'no',
-				get_post_meta( $post->ID, '_wlr_deadline_at', true ),
-				'1' === get_post_meta( $post->ID, '_wlr_deadline_may_be_expired', true ) ? 'yes' : 'no',
-			);
+				$row = array(
+					$post->ID,
+					get_post_meta( $post->ID, '_wlr_submitted_at_utc', true ),
+					get_post_meta( $post->ID, '_wlr_order_id', true ),
+					get_post_meta( $post->ID, '_wlr_customer_email', true ),
+					WLR_Post_Type::get_status_label( $post->post_status ),
+					get_post_meta( $post->ID, '_wlr_reason', true ),
+					implode( '; ', $item_names ),
+					get_post_meta( $post->ID, '_wlr_receipt_hash', true ),
+					'1' === get_post_meta( $post->ID, '_wlr_receipt_sent', true ) ? 'yes' : 'no',
+					get_post_meta( $post->ID, '_wlr_deadline_at', true ),
+					'1' === get_post_meta( $post->ID, '_wlr_deadline_may_be_expired', true ) ? 'yes' : 'no',
+				);
 
-			if ( $include_pii ) {
-				$row[] = get_post_meta( $post->ID, '_wlr_ip', true );
-				$row[] = get_post_meta( $post->ID, '_wlr_user_agent', true );
+				if ( $include_pii ) {
+					$row[] = get_post_meta( $post->ID, '_wlr_ip', true );
+					$row[] = get_post_meta( $post->ID, '_wlr_user_agent', true );
+				}
+
+				fputcsv( $output, array_map( array( $this, 'csv_escape' ), $row ), ',', '"', '' );
 			}
-
-			fputcsv( $output, array_map( array( $this, 'csv_escape' ), $row ) );
-		}
+			++$args['paged'];
+			$batch_count = count( $posts );
+		} while ( 200 === $batch_count );
 
 		fclose( $output ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose
 		exit;
@@ -725,6 +763,35 @@ class WLR_Admin {
 		}
 
 		return $value;
+	}
+
+	public function handle_resend_receipt(): void {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( esc_html__( 'Permessi insufficienti.', 'woo-legal-returns' ) );
+		}
+		$return_id = absint( $_POST['return_id'] ?? 0 );
+		check_admin_referer( 'wlr_resend_receipt_' . $return_id );
+		WLR_Emails::instance()->send_customer_received( $return_id, true );
+		wp_safe_redirect( admin_url( 'admin.php?page=wlr-returns&action=view&id=' . $return_id ) );
+		exit;
+	}
+
+	public function handle_restore_return(): void {
+		if ( ! current_user_can( 'manage_woocommerce' ) ) {
+			wp_die( esc_html__( 'Permessi insufficienti.', 'woo-legal-returns' ) );
+		}
+		$return_id = absint( $_POST['return_id'] ?? 0 );
+		check_admin_referer( 'wlr_restore_return_' . $return_id );
+		$post   = get_post( $return_id );
+		$status = (string) get_post_meta( $return_id, '_wp_trash_meta_status', true );
+		if ( ! $post || WLR_Post_Type::POST_TYPE !== $post->post_type || 'trash' !== $post->post_status
+			|| ! WLR_Post_Type::update_status( $return_id, array_key_exists( $status, WLR_Post_Type::STATUSES ) ? $status : 'wlr-requested' ) ) {
+			wp_die( esc_html__( 'Ripristino fallito: verifica ordine, esclusioni e quantità già impegnate da altre richieste.', 'woo-legal-returns' ) );
+		}
+		delete_post_meta( $return_id, '_wp_trash_meta_status' );
+		delete_post_meta( $return_id, '_wp_trash_meta_time' );
+		wp_safe_redirect( admin_url( 'admin.php?page=wlr-returns&action=view&id=' . $return_id ) );
+		exit;
 	}
 
 	private function log_error( string $message ): void {

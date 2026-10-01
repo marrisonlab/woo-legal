@@ -23,6 +23,8 @@ class WLR_Privacy {
 		add_action( 'admin_init', array( $this, 'register_policy_content' ) );
 		add_filter( 'wp_privacy_personal_data_exporters', array( $this, 'register_exporter' ) );
 		add_filter( 'wp_privacy_personal_data_erasers', array( $this, 'register_eraser' ) );
+		add_filter( 'woocommerce_privacy_export_order_personal_data', array( $this, 'export_order_consents' ), 10, 2 );
+		add_action( 'woocommerce_privacy_before_remove_order_personal_data', array( $this, 'erase_order_consents' ) );
 	}
 
 	public function register_policy_content(): void {
@@ -56,7 +58,9 @@ class WLR_Privacy {
 		$query = new WP_Query(
 			array(
 				'post_type'      => WLR_Post_Type::POST_TYPE,
-				'post_status'    => array_keys( WLR_Post_Type::STATUSES ),
+				'post_status'    => array_merge( array_keys( WLR_Post_Type::STATUSES ), array( 'trash' ) ),
+				'orderby'        => 'ID',
+				'order'          => 'ASC',
 				'posts_per_page' => 50,
 				'paged'          => $page,
 				'fields'         => 'ids',
@@ -117,6 +121,18 @@ class WLR_Privacy {
 					'value' => get_post_meta( $post_id, '_wlr_receipt_hash', true ),
 				),
 			);
+			foreach ( array(
+				'_wlr_customer_name' => 'Nome',
+				'_wlr_items'         => 'Articoli',
+				'_wlr_history'       => 'Cronologia',
+				'_wlr_declaration'   => 'Dichiarazione confermata',
+			) as $key => $label ) {
+				$value  = get_post_meta( $post_id, $key, true );
+				$data[] = array(
+					'name'  => $label,
+					'value' => is_array( $value ) ? wp_json_encode( $value ) : (string) $value,
+				);
+			}
 
 			$items[] = array(
 				'group_id'    => 'wlr-returns',
@@ -147,29 +163,49 @@ class WLR_Privacy {
 	}
 
 	public function erase_personal_data( string $email_address, int $page = 1 ): array {
-		$page  = max( 1, $page );
-		$query = new WP_Query(
-			array(
-				'post_type'      => WLR_Post_Type::POST_TYPE,
-				'post_status'    => array_keys( WLR_Post_Type::STATUSES ),
-				'posts_per_page' => 50,
-				'paged'          => $page,
-				'fields'         => 'ids',
-				'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
-					array(
-						'key'   => '_wlr_customer_email',
-						'value' => sanitize_email( $email_address ),
+		$page = max( 1, $page );
+		$key  = 'wlr_privacy_erase_' . wp_hash( strtolower( sanitize_email( $email_address ) ) );
+		if ( 1 === $page ) {
+			$ids = get_posts(
+				array(
+					'post_type'      => WLR_Post_Type::POST_TYPE,
+					'post_status'    => array_merge( array_keys( WLR_Post_Type::STATUSES ), array( 'trash' ) ),
+					'posts_per_page' => -1,
+					'orderby'        => 'ID',
+					'order'          => 'ASC',
+					'fields'         => 'ids',
+					'meta_query'     => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+						array(
+							'key'   => '_wlr_customer_email',
+							'value' => sanitize_email( $email_address ),
+						),
 					),
-				),
-			)
-		);
+				)
+			);
+			set_transient( $key, $ids, DAY_IN_SECONDS );
+		} else {
+			$ids = get_transient( $key );
+		}
+		if ( ! is_array( $ids ) ) {
+			return array(
+				'items_removed'  => false,
+				'items_retained' => true,
+				'messages'       => array( __( 'Sessione di cancellazione scaduta: avvia nuovamente la richiesta privacy.', 'woo-legal-returns' ) ),
+				'done'           => true,
+			);
+		}
+		$batch = array_slice( $ids, ( $page - 1 ) * 50, 50 );
 
 		$removed  = false;
 		$retained = false;
 		$messages = array();
 
-		foreach ( $query->posts as $post_id ) {
+		foreach ( $batch as $post_id ) {
+			if ( ! get_post( $post_id ) ) {
+				continue;
+			}
 			if ( wp_delete_post( $post_id, true ) ) {
+				wp_clear_scheduled_hook( 'wlr_retry_receipt', array( (int) $post_id ) );
 				$removed = true;
 			} else {
 				$retained   = true;
@@ -181,11 +217,35 @@ class WLR_Privacy {
 			}
 		}
 
+		$done = $page * 50 >= count( $ids );
+		if ( $done ) {
+			delete_transient( $key );
+		}
 		return array(
 			'items_removed'  => $removed,
 			'items_retained' => $retained,
 			'messages'       => $messages,
-			'done'           => count( $query->posts ) < 50,
+			'done'           => $done,
 		);
+	}
+
+	public function export_order_consents( array $data, WC_Order $order ): array {
+		foreach ( WLR_Checkout_Consent::get_order_consents( $order ) as $type => $consent ) {
+			$data[] = array(
+				'name'  => 'Woo Legal Returns — ' . $type,
+				'value' => wp_json_encode( $consent ),
+			);
+		}
+		return $data;
+	}
+
+	public function erase_order_consents( WC_Order $order ): void {
+		foreach ( array( 'digital', 'service' ) as $type ) {
+			foreach ( array( 'accepted', 'text', 'timestamp', 'ip', 'ua', 'loss_acknowledged' ) as $suffix ) {
+				$order->delete_meta_data( '_wlr_consent_' . $type . '_' . $suffix );
+			}
+			$order->delete_meta_data( '_wc_other/woo-legal/' . $type );
+		}
+		$order->save();
 	}
 }

@@ -12,7 +12,9 @@ class WLR_Emails {
 	private static ?WLR_Emails $instance = null;
 
 	/** Traccia l'email corrente in cui il link è già stato stampato (email_id::order_id). */
-	private string $link_printed_key = '';
+	private string $link_printed_key     = '';
+	private ?object $plain_email_context = null;
+	private string $plain_email_template = '';
 
 	public static function instance(): self {
 		if ( null === self::$instance ) {
@@ -25,6 +27,10 @@ class WLR_Emails {
 	private function hooks(): void {
 		add_action( 'wlr_return_created', array( $this, 'on_return_created' ), 10, 3 );
 		add_action( 'wlr_return_status_changed', array( $this, 'on_status_changed' ), 10, 3 );
+		add_action( 'wlr_retry_receipt', array( $this, 'send_customer_received' ) );
+		add_filter( 'woocommerce_email_footer_text', array( $this, 'add_plain_footer_link' ), 20, 2 );
+		add_action( 'woocommerce_before_template_part', array( $this, 'capture_plain_email_context' ), 10, 4 );
+		add_action( 'woocommerce_after_template_part', array( $this, 'clear_plain_email_context' ), 10, 4 );
 
 		// Link di recesso nelle email ordine WooCommerce.
 		// Hook 1: dopo la tabella ordine (posizione ideale, dipende dalla template).
@@ -78,23 +84,18 @@ class WLR_Emails {
 			return;
 		}
 
-		$wc_status_map = array(
-			'wlr-approved' => 'on-hold',
-			'wlr-refunded' => 'refunded',
-		);
-
-		if ( ! isset( $wc_status_map[ $new_status ] ) ) {
+		if ( 'wlr-refunded' !== $new_status ) {
 			return;
 		}
 
 		$order_id = (int) get_post_meta( $return_id, '_wlr_order_id', true );
 		$order    = wc_get_order( $order_id );
-		if ( ! $order ) {
+		if ( ! $order || (float) $order->get_total() <= 0 || (float) $order->get_total_refunded() < (float) $order->get_total() ) {
 			return;
 		}
 
 		$order->update_status(
-			$wc_status_map[ $new_status ],
+			'refunded',
 			__( 'Aggiornato automaticamente da richiesta di reso #', 'woo-legal-returns' ) . $return_id
 		);
 	}
@@ -161,7 +162,39 @@ class WLR_Emails {
 			return;
 		}
 
-		$this->output_withdrawal_link( $order );
+		$this->output_withdrawal_link( $order, 'plain' === $email->get_email_type() );
+	}
+
+	public function add_plain_footer_link( string $text, $email = null ): string {
+		$email = $email ?? $this->plain_email_context;
+		if ( ! is_object( $email ) || 'plain' !== $email->get_email_type()
+			|| ! $this->is_customer_order_email( (string) $email->id ) || ! $email->object instanceof WC_Order ) {
+			return $text;
+		}
+		$key = $email->id . '::' . $email->object->get_id();
+		if ( $this->link_printed_key === $key ) {
+			$this->link_printed_key = '';
+			return $text;
+		}
+		return $this->should_show_withdrawal_link( $email->object ) ? $text . "\n" . __( 'Recedere dal contratto qui:', 'woo-legal-returns' ) . ' ' . WLR_Customer_Account::get_order_return_url( $email->object ) : $text;
+	}
+
+	public function capture_plain_email_context( string $name, $path, $located, array $args ): void {
+		unset( $path, $located );
+		if ( null === $this->plain_email_context && 0 === strpos( $name, 'emails/plain/' )
+			&& isset( $args['email'] ) && is_object( $args['email'] ) && 'plain' === $args['email']->get_email_type() ) {
+			$this->plain_email_context  = $args['email'];
+			$this->plain_email_template = $name;
+		}
+	}
+
+	public function clear_plain_email_context( string $name, $path, $located, array $args ): void {
+		unset( $path, $located, $args );
+		if ( $name === $this->plain_email_template ) {
+			$this->plain_email_context  = null;
+			$this->plain_email_template = '';
+			$this->link_printed_key     = '';
+		}
 	}
 
 	/**
@@ -185,7 +218,7 @@ class WLR_Emails {
 
 		if ( $plain_text ) {
 			echo "\n" . esc_html__( 'Diritto di recesso:', 'woo-legal-returns' ) . ' ';
-			echo esc_html__( 'Hai 14 giorni dalla ricezione per recedere dal contratto.', 'woo-legal-returns' ) . "\n";
+			echo esc_html__( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali.', 'woo-legal-returns' ) . "\n";
 			echo esc_url( $return_url ) . "\n";
 			return;
 		}
@@ -194,7 +227,7 @@ class WLR_Emails {
 			'<p style="margin-top:20px;padding:12px 15px;background:#f8f8f8;border-left:4px solid #96588a;font-size:13px;">' .
 			'<strong>%s</strong> %s <a href="%s" style="color:#96588a;">%s</a></p>',
 			esc_html__( 'Diritto di recesso:', 'woo-legal-returns' ),
-			esc_html__( 'Hai 14 giorni dalla ricezione per recedere dal contratto.', 'woo-legal-returns' ),
+			esc_html__( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali.', 'woo-legal-returns' ),
 			esc_url( $return_url ),
 			esc_html__( 'Recedere dal contratto qui', 'woo-legal-returns' )
 		);
@@ -229,7 +262,26 @@ class WLR_Emails {
 	// Email al cliente: conferma ricezione
 	// -------------------------------------------------------------------------
 
-	private function send_customer_received( int $return_id ): void {
+	public function send_customer_received( int $return_id, bool $force = false ): void {
+		$post = get_post( $return_id );
+		if ( ! $post || 'trash' === $post->post_status || ( ! $force && '1' === get_post_meta( $return_id, '_wlr_receipt_sent', true ) ) ) {
+			return;
+		}
+		$lock = WLR_Lock::acquire( 'receipt:' . $return_id );
+		if ( is_wp_error( $lock ) ) {
+			return;
+		}
+		try {
+			$this->attempt_customer_received( $return_id, $force );
+		} finally {
+			WLR_Lock::release( $lock );
+		}
+	}
+
+	private function attempt_customer_received( int $return_id, bool $force ): void {
+		if ( ! $force && '1' === get_post_meta( $return_id, '_wlr_receipt_sent', true ) ) {
+			return;
+		}
 		$data = $this->get_email_data( $return_id );
 		if ( ! $data ) {
 			return;
@@ -242,14 +294,33 @@ class WLR_Emails {
 			$return_id
 		);
 
-		$message = $this->get_template_content(
-			'emails/customer-return-received.php',
-			$data
-		);
-
-		if ( $this->send( $data['customer_email'], $subject, $message ) ) {
+		$attempt = $force ? 1 : 1 + (int) get_post_meta( $return_id, '_wlr_receipt_attempts', true );
+		update_post_meta( $return_id, '_wlr_receipt_attempts', $attempt );
+		$error   = '';
+		$capture = static function ( $failure ) use ( &$error ): void {
+			$error = sanitize_text_field( $failure->get_error_message() );
+		};
+		add_action( 'wp_mail_failed', $capture );
+		try {
+			$message = $this->get_template_content( 'emails/customer-return-received.php', $data );
+			$sent    = $this->send( $data['customer_email'], $subject, $message );
+		} catch ( Throwable $failure ) {
+			$sent  = false;
+			$error = sanitize_text_field( $failure->getMessage() );
+		} finally {
+			remove_action( 'wp_mail_failed', $capture );
+		}
+		update_post_meta( $return_id, '_wlr_receipt_last_attempt', gmdate( 'c' ) );
+		update_post_meta( $return_id, '_wlr_receipt_last_error', $sent ? '' : ( $error ? $error : __( 'Il servizio email non ha accettato l’invio.', 'woo-legal-returns' ) ) );
+		if ( $sent ) {
 			update_post_meta( $return_id, '_wlr_receipt_sent', '1' );
 			update_post_meta( $return_id, '_wlr_receipt_sent_at', current_time( 'mysql', true ) );
+			wp_clear_scheduled_hook( 'wlr_retry_receipt', array( $return_id ) );
+		} else {
+			$this->log_error( 'Ricevuta #' . $return_id . ': ' . $error );
+			if ( $attempt < 3 && ! wp_next_scheduled( 'wlr_retry_receipt', array( $return_id ) ) ) {
+				wp_schedule_single_event( time() + ( 1 === $attempt ? MINUTE_IN_SECONDS : 5 * MINUTE_IN_SECONDS ), 'wlr_retry_receipt', array( $return_id ) );
+			}
 		}
 	}
 
@@ -341,27 +412,24 @@ class WLR_Emails {
 		$customer_id = (int) get_post_meta( $return_id, '_wlr_customer_id', true );
 		$order       = wc_get_order( $order_id );
 
-		if ( ! $order ) {
-			return null;
-		}
+		$snapshot = get_post_meta( $return_id, '_wlr_declaration', true );
+		$snapshot = is_array( $snapshot ) ? $snapshot : array();
 
 		$return_items = get_post_meta( $return_id, '_wlr_items', true );
 		$return_items = is_array( $return_items ) ? $return_items : array();
 
 		// Supporto ospiti: $customer_id può essere 0.
-		$is_guest = ( 0 === $customer_id );
-		$customer = $is_guest ? null : get_userdata( $customer_id );
+		$is_guest   = ( 0 === $customer_id );
+		$saved_name = get_post_meta( $return_id, '_wlr_customer_name', true );
 
 		// Oggetto "cliente" sintetico per i template (funziona sia per registrati che ospiti).
 		$customer_obj = (object) array(
-			'display_name' => $is_guest
-				? trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() )
-				: ( $customer ? $customer->display_name : $order->get_billing_first_name() ),
-			'user_email'   => $order->get_billing_email(),
+			'display_name' => $snapshot['name'] ?? ( $saved_name ? $saved_name : ( $order ? trim( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ) : __( 'Cliente', 'woo-legal-returns' ) ) ),
+			'user_email'   => $snapshot['email'] ?? get_post_meta( $return_id, '_wlr_customer_email', true ),
 		);
 
 		// URL per il cliente: con order_key per ospiti, My Account per registrati.
-		if ( $is_guest ) {
+		if ( $is_guest && $order ) {
 			$account_url = WLR_Customer_Account::get_order_return_url( $order );
 		} else {
 			$account_url = wc_get_account_endpoint_url( WLR_Customer_Account::ENDPOINT );
@@ -372,20 +440,23 @@ class WLR_Emails {
 			'return_post'             => $post,
 			'order'                   => $order,
 			'order_id'                => $order_id,
+			'order_number'            => $snapshot['order_number'] ?? ( $order ? $order->get_order_number() : $order_id ),
+			'declaration'             => $snapshot['statement'] ?? WLR_Post_Type::get_declaration_text(),
+			'trader'                  => $snapshot['trader'] ?? array(),
 			'customer'                => $customer_obj,
 			'is_guest'                => $is_guest,
-			'customer_email'          => $order->get_billing_email(),
+			'customer_email'          => $customer_obj->user_email,
 			'reason'                  => get_post_meta( $return_id, '_wlr_reason', true ),
-			'reason_label'            => ( static function ( string $key ): string {
+			'reason_label'            => $snapshot['reason_label'] ?? ( static function ( string $key ): string {
 				$r = WLR_Customer_Account::instance()->get_return_reasons();
 				return $r[ $key ] ?? $key;
 			} )( get_post_meta( $return_id, '_wlr_reason', true ) ),
-			'items'                   => $return_items,
-			'notes'                   => $post->post_content,
+			'items'                   => $snapshot['items'] ?? $return_items,
+			'notes'                   => $snapshot['notes'] ?? $post->post_content,
 			'status'                  => $post->post_status,
 			'status_label'            => WLR_Post_Type::get_status_label( $post->post_status ),
 			'created_at'              => get_post_meta( $return_id, '_wlr_created_at', true ),
-			'submitted_at_utc'        => get_post_meta( $return_id, '_wlr_submitted_at_utc', true ),
+			'submitted_at_utc'        => $snapshot['submitted_at_utc'] ?? get_post_meta( $return_id, '_wlr_submitted_at_utc', true ),
 			'receipt_hash'            => get_post_meta( $return_id, '_wlr_receipt_hash', true ),
 			'deadline_may_be_expired' => '1' === get_post_meta( $return_id, '_wlr_deadline_may_be_expired', true ),
 			'admin_url'               => admin_url( 'admin.php?page=wlr-returns&action=view&id=' . $return_id ),
@@ -404,6 +475,7 @@ class WLR_Emails {
 	private function get_template_content( string $template_name, array $data ): string {
 		// Il plugin usa i template di WooCommerce (header/footer email).
 		ob_start();
+		WC()->mailer();
 
 		wc_get_template(
 			$template_name,
@@ -423,12 +495,7 @@ class WLR_Emails {
 	 * @param string $message
 	 */
 	private function send( string|array $to, string $subject, string $message ): bool {
-		$headers = array(
-			'Content-Type: text/html; charset=UTF-8',
-			'From: ' . get_bloginfo( 'name' ) . ' <' . get_option( 'admin_email' ) . '>',
-		);
-
-		return (bool) wp_mail( $to, $subject, $message, $headers );
+		return (bool) WC()->mailer()->send( is_array( $to ) ? implode( ',', $to ) : $to, $subject, $message, "Content-Type: text/html; charset=UTF-8\r\n", '' );
 	}
 
 	private function get_admin_notification_recipients(): array {

@@ -97,5 +97,15 @@ defined( 'ABSPATH' ) || exit;
 		</table>
 
 	<?php endif; ?>
+	<nav aria-label="<?php esc_attr_e( 'Pagine delle richieste', 'woo-legal-returns' ); ?>">
+		<?php
+		if ( ( $page ?? 1 ) > 1 ) :
+			?>
+			<a class="button" href="<?php echo esc_url( add_query_arg( 'wlr_page', $page - 1, wc_get_account_endpoint_url( WLR_Customer_Account::ENDPOINT ) ) ); ?>"><?php esc_html_e( 'Precedenti', 'woo-legal-returns' ); ?></a><?php endif; ?>
+		<?php
+		if ( ! empty( $has_next_page ) ) :
+			?>
+			<a class="button" href="<?php echo esc_url( add_query_arg( 'wlr_page', ( $page ?? 1 ) + 1, wc_get_account_endpoint_url( WLR_Customer_Account::ENDPOINT ) ) ); ?>"><?php esc_html_e( 'Successive', 'woo-legal-returns' ); ?></a><?php endif; ?>
+	</nav>
 
 </div>

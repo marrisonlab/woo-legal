@@ -97,15 +97,23 @@ class WLR_Setup_Wizard {
 		if ( 'existing' === $mode ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
 			$page_id = absint( wp_unslash( $_POST['existing_page_id'] ?? 0 ) );
+			$page    = $page_id ? get_post( $page_id ) : null;
+			if ( ! $page || 'page' !== $page->post_type || ! current_user_can( 'edit_post', $page_id ) ) {
+				wp_die( esc_html__( 'Seleziona una pagina valida e modificabile.', 'woo-legal-returns' ) );
+			}
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
 			$refresh_existing_page = ! empty( $_POST['refresh_existing_page'] );
-			if ( $page_id && ( $refresh_existing_page || '1' === get_post_meta( $page_id, '_wlr_generated_precontractual_page', true ) ) ) {
-				wp_update_post(
+			if ( $page_id && $refresh_existing_page ) {
+				$updated = wp_update_post(
 					array(
 						'ID'           => $page_id,
 						'post_content' => $this->get_default_page_content( $trader_data ),
-					)
+					),
+					true
 				);
+				if ( ! $updated || is_wp_error( $updated ) ) {
+					wp_die( esc_html__( 'Aggiornamento della pagina fallito.', 'woo-legal-returns' ) );
+				}
 			}
 		} else {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Verified in handle_post before dispatch; unslashed here and sanitized below.
@@ -117,7 +125,8 @@ class WLR_Setup_Wizard {
 					'post_content' => $this->get_default_page_content( $trader_data ),
 					'post_status'  => 'publish',
 					'post_type'    => 'page',
-				)
+				),
+				true
 			);
 			if ( $page_id && ! is_wp_error( $page_id ) ) {
 				update_post_meta( (int) $page_id, '_wlr_generated_precontractual_page', '1' );
@@ -126,6 +135,8 @@ class WLR_Setup_Wizard {
 
 		if ( $page_id && ! is_wp_error( $page_id ) ) {
 			$this->save_option( 'precontractual_page_id', (int) $page_id );
+		} else {
+			wp_die( esc_html__( 'Creazione della pagina fallita.', 'woo-legal-returns' ) );
 		}
 
 		wp_safe_redirect( $this->wizard_url( 'menu' ) );
@@ -785,7 +796,7 @@ Ai sensi degli artt. 49&#x2013;59 del D.Lgs. 206/2005 (Codice del Consumo), come
 <!-- /wp:heading -->
 
 <!-- wp:paragraph -->
-<p>Rimborseremo tutti i pagamenti ricevuti entro <strong>14 giorni</strong> dalla comunicazione di recesso, utilizzando lo stesso mezzo di pagamento usato per la transazione iniziale, salvo accordo diverso.</p>
+<p>Rimborseremo tutti i pagamenti ricevuti, compresi i costi di consegna standard, entro <strong>14 giorni</strong> dalla comunicazione di recesso, utilizzando lo stesso mezzo di pagamento usato per la transazione iniziale, salvo accordo diverso. Per i beni, salvo ritiro offerto dal venditore, possiamo trattenere il rimborso fino alla ricezione dei beni o della prova di spedizione, se precedente.</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:heading {\"level\":3} -->
@@ -805,9 +816,13 @@ Ai sensi degli artt. 49&#x2013;59 del D.Lgs. 206/2005 (Codice del Consumo), come
 <li>Beni confezionati su misura o personalizzati;</li>
 <li>Beni che rischiano di deteriorarsi o scadere rapidamente;</li>
 <li>Beni sigillati aperti dopo la consegna non idonei alla restituzione per motivi igienici;</li>
-<li>Contenuti digitali su supporto non materiale la cui esecuzione &egrave; iniziata con il previo consenso del consumatore.</li>
+<li>Contenuti digitali su supporto non materiale la cui esecuzione &egrave; iniziata con previo consenso espresso, riconoscimento della perdita del diritto e conferma su supporto durevole, nei casi previsti dalla normativa.</li>
 </ul>
 <!-- /wp:list -->
+
+<!-- wp:shortcode -->
+[wlr_model_withdrawal_form]
+<!-- /wp:shortcode -->
 
 <!-- wp:paragraph -->
 <p><em>Aggiornato: {$date} &mdash; D.Lgs. 209/2025 (art. 54-bis Codice del Consumo)</em></p>

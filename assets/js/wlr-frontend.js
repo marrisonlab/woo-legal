@@ -3,8 +3,18 @@
 
 ( function ( $ ) {
 	'use strict';
+	if ( ! $( '#wlr-return-form' ).length ) {
+		return;
+	}
 
 	var confirmationToken = '';
+	var itemsRequest = null;
+	var itemsGeneration = 0;
+	var nonceReady = $.post( wlrData.ajaxUrl, { action: 'wlr_refresh_nonce' } ).then( function ( response ) {
+		if ( response.success ) {
+			wlrData.nonce = response.data.nonce;
+		}
+	} );
 
 	function resetConfirmation() {
 		confirmationToken = '';
@@ -19,6 +29,11 @@
 	} );
 
 	function loadOrderItems() {
+		var generation = ++itemsGeneration;
+		resetConfirmation();
+		if ( itemsRequest ) {
+			itemsRequest.abort();
+		}
 		var orderId = $( '#wlr_order_id' ).val();
 		var guestEmail = $( '#wlr_guest_email' ).val() || '';
 		var $container = $( '#wlr-items-container' );
@@ -39,7 +54,11 @@
 			$( '<p><em></em></p>' ).find( 'em' ).text( wlrData.i18n.loadingItems ).end()
 		);
 
-		$.post(
+		nonceReady.then( function () {
+		if ( generation !== itemsGeneration ) {
+			return;
+		}
+		itemsRequest = $.post(
 			wlrData.ajaxUrl,
 			{
 				action   : 'wlr_get_order_items',
@@ -49,6 +68,9 @@
 				guest_email: guestEmail,
 			},
 			function ( response ) {
+				if ( generation !== itemsGeneration ) {
+					return;
+				}
 				if ( response.success ) {
 					renderItems( response.data.items );
 					return;
@@ -56,19 +78,31 @@
 
 				$container.empty().append( $( '<p class="woocommerce-error"></p>' ).text( response.data.message ) );
 			}
-		).fail( function () {
+		).fail( function ( xhr, status ) {
+			if ( status === 'abort' || generation !== itemsGeneration ) {
+				return;
+			}
 			$container.empty().append( $( '<p class="woocommerce-error"></p>' ).text( wlrData.i18n.errorGeneric ) );
+		} );
 		} );
 	}
 
 	$( document ).on( 'change', '#wlr_order_id', loadOrderItems );
 	$( document ).on( 'click', '.wlr-load-order-items', loadOrderItems );
+	$( document ).on( 'change', '#wlr_guest_email', loadOrderItems );
+	$( document ).on( 'input', '#wlr_guest_email', function () {
+		++itemsGeneration;
+		if ( itemsRequest ) {
+			itemsRequest.abort();
+		}
+		$( '#wlr-items-container' ).empty();
+	} );
 
 	function renderItems( items ) {
 		var $container = $( '#wlr-items-container' );
 
 		if ( ! items || ! items.length ) {
-			$container.html( '<p><em>Nessun prodotto fisico recedibile trovato in questo ordine.</em></p>' );
+			$container.html( '<p><em>Nessun articolo con quantità disponibile per il recesso.</em></p>' );
 			return;
 		}
 
@@ -84,7 +118,7 @@
 			}
 
 			var $check = $( '<input type="checkbox" class="wlr-item-check">' )
-				.attr( 'data-item-id', item.item_id );
+				.attr( 'data-item-id', item.item_id ).attr( 'aria-label', 'Seleziona ' + item.name );
 
 			if ( noReturn ) {
 				$check.prop( 'disabled', true ).attr( 'title', item.no_return_reason || 'Escluso dal diritto di recesso' );
@@ -111,6 +145,8 @@
 							'data-item-id': item.item_id,
 							min           : 1,
 							max           : item.qty,
+							step          : 1,
+							'aria-label'  : 'Quantità da rendere: ' + item.name,
 						} )
 						.val( item.qty )
 				);
@@ -146,15 +182,18 @@
 		return items;
 	}
 
-	$( '#wlr-return-form' ).on( 'submit', function ( e ) {
+	$( document ).on( 'submit', '#wlr-return-form', function ( e ) {
 		e.preventDefault();
 
 		var $btn = $( '#wlr-submit-btn' );
 		var $msg = $( '#wlr-form-messages' );
+		var $fields = $( '#wlr-return-form :input:enabled' ).not( '#wlr-submit-btn' );
+		$fields.prop( 'disabled', true );
 
 		$btn.prop( 'disabled', true ).text( wlrData.i18n.submitting );
 		$msg.hide().removeClass( 'success error' ).text( '' );
 
+		nonceReady.then( function () {
 		$.post(
 			wlrData.ajaxUrl,
 			{
@@ -166,18 +205,21 @@
 				items               : JSON.stringify( collectItems() ),
 				order_key           : $( '#wlr_order_key' ).val() || '',
 				guest_email         : $( '#wlr_guest_email' ).val() || '',
+				customer_name       : $( '#wlr_customer_name' ).val() || '',
 				confirm_withdrawal  : $( '[name="confirm_withdrawal"]' ).is( ':checked' ) ? '1' : '',
 				confirmation_token  : confirmationToken,
 			},
 			function ( response ) {
+				$fields.prop( 'disabled', false );
 				$btn.prop( 'disabled', false );
 
 				if ( response.success && response.data.needs_confirmation ) {
 					confirmationToken = response.data.token;
 					$( '#wlr-confirmation-summary' ).remove();
 					$( '#wlr-return-form' ).prepend(
-						$( '<div id="wlr-confirmation-summary"></div>' ).html( response.data.summary )
+						$( '<div id="wlr-confirmation-summary" tabindex="-1"></div>' ).html( response.data.summary )
 					);
+					$( '#wlr-confirmation-summary' ).trigger( 'focus' );
 					$btn.text( wlrData.i18n.confirmBtn );
 					return;
 				}
@@ -192,13 +234,18 @@
 					return;
 				}
 
-				$msg.addClass( 'error' ).text( response.data.message ).show();
+				$msg.addClass( 'error' ).text( response.data.message ).show().trigger( 'focus' );
 				resetConfirmation();
 			}
 		).fail( function () {
+			$fields.prop( 'disabled', false );
 			$btn.prop( 'disabled', false ).text( wlrData.i18n.submitBtn );
 			$msg.addClass( 'error' ).text( wlrData.i18n.errorGeneric ).show();
-			resetConfirmation();
+		} );
+		}, function () {
+			$fields.prop( 'disabled', false );
+			$btn.prop( 'disabled', false ).text( wlrData.i18n.submitBtn );
+			$msg.addClass( 'error' ).text( wlrData.i18n.errorGeneric ).show();
 		} );
 	} );
 

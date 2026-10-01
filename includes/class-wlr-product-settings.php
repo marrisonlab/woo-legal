@@ -34,6 +34,12 @@ class WLR_Product_Settings {
 		add_action( 'admin_head', array( $this, 'tab_icon_css' ) );
 		add_action( 'woocommerce_single_product_summary', array( $this, 'render_product_notice' ), 18 );
 		add_shortcode( 'wlr_withdrawal_notice', array( $this, 'notice_shortcode' ) );
+		add_action( 'woocommerce_product_after_variable_attributes', array( $this, 'render_variation_field' ), 10, 3 );
+		add_action( 'woocommerce_save_product_variation', array( $this, 'save_variation_field' ), 10, 2 );
+		add_action( 'woocommerce_checkout_create_order_line_item', array( $this, 'snapshot_item' ), 10, 4 );
+		add_action( 'woocommerce_store_api_checkout_order_processed', array( $this, 'snapshot_block_order' ) );
+		add_action( 'woocommerce_admin_order_data_after_order_details', array( $this, 'render_order_facts' ) );
+		add_action( 'woocommerce_process_shop_order_meta', array( $this, 'save_order_facts' ), 20 );
 	}
 
 	public function add_tab( array $tabs ): array {
@@ -127,6 +133,9 @@ class WLR_Product_Settings {
 		if ( ! current_user_can( 'edit_product', $post_id ) ) {
 			return;
 		}
+		if ( ! isset( $_POST['_wlr_withdrawal_status'] ) ) {
+			return;
+		}
 
 		$status = isset( $_POST['_wlr_withdrawal_status'] )
 			? sanitize_key( wp_unslash( $_POST['_wlr_withdrawal_status'] ) )
@@ -134,6 +143,8 @@ class WLR_Product_Settings {
 
 		if ( '' === $status ) {
 			delete_post_meta( $post_id, self::META_STATUS );
+			delete_post_meta( $post_id, self::LEGACY_NO_RETURN );
+			delete_post_meta( $post_id, self::LEGACY_REASON );
 			return;
 		}
 
@@ -153,7 +164,7 @@ class WLR_Product_Settings {
 			<td>
 				<?php wp_nonce_field( 'wlr_save_category_status', 'wlr_category_status_nonce' ); ?>
 				<select name="_wlr_withdrawal_status" id="_wlr_withdrawal_status" style="width:30em;max-width:100%;">
-					<option value="" <?php selected( '', $current ); ?>><?php esc_html_e( 'Nessun valore: standard', 'woo-legal-returns' ); ?></option>
+					<option value="" <?php selected( '', $current ); ?>><?php esc_html_e( 'Eredita dalla categoria superiore', 'woo-legal-returns' ); ?></option>
 					<?php foreach ( self::get_status_options() as $value => $label ) : ?>
 						<option value="<?php echo esc_attr( $value ); ?>" <?php selected( $current, $value ); ?>>
 							<?php echo esc_html( $label ); ?>
@@ -186,7 +197,7 @@ class WLR_Product_Settings {
 			? sanitize_key( wp_unslash( $_POST['_wlr_withdrawal_status'] ) )
 			: '';
 
-		if ( '' === $status || ! self::is_valid_status( $status ) || 'standard' === $status ) {
+		if ( '' === $status || ! self::is_valid_status( $status ) ) {
 			delete_term_meta( $term_id, self::TERM_META_STATUS );
 			return;
 		}
@@ -207,7 +218,9 @@ class WLR_Product_Settings {
 		echo wp_kses_post( self::get_product_notice_html( $product->get_id() ) );
 	}
 
-	public function notice_shortcode( array $atts = array() ): string {
+	public function notice_shortcode( $atts = array() ): string {
+		$atts = is_array( $atts ) ? $atts : array();
+		wp_enqueue_style( 'wlr-frontend', WLR_PLUGIN_URL . 'assets/css/wlr-frontend.css', array(), WLR_VERSION );
 		$atts = shortcode_atts(
 			array(
 				'id' => 0,
@@ -323,17 +336,10 @@ class WLR_Product_Settings {
 				continue;
 			}
 
-			$product = $item->get_product();
-			if ( ! $product ) {
-				continue;
-			}
+			$product_id = $item->get_product_id();
+			$status     = self::get_item_status( $item );
 
-			$product_id   = $product->get_id();
-			$variation_id = method_exists( $item, 'get_variation_id' ) ? (int) $item->get_variation_id() : 0;
-			$check_id     = $variation_id ? $variation_id : $product_id;
-			$status       = self::get_product_withdrawal_status( $check_id );
-
-			if ( self::is_excluded_status( $status ) ) {
+			if ( self::is_item_excluded( $item, $order ) ) {
 				$excluded[] = array(
 					'item_id'    => (int) $item_id,
 					'product_id' => $product_id,
@@ -354,11 +360,11 @@ class WLR_Product_Settings {
 		}
 
 		$status = self::get_product_withdrawal_status( $product_id );
-		if ( ! self::is_excluded_status( $status ) ) {
+		if ( ! self::is_excluded_status( $status ) && 'early_service' !== $status ) {
 			return '';
 		}
 
-		$title = __( 'Diritto di recesso non applicabile a questo prodotto', 'woo-legal-returns' );
+		$title = __( 'Condizioni ed eccezioni al diritto di recesso', 'woo-legal-returns' );
 		if ( 'digital_content' === $status ) {
 			$title = __( 'Contenuto digitale con consenso espresso', 'woo-legal-returns' );
 		}
@@ -394,18 +400,180 @@ class WLR_Product_Settings {
 		if ( empty( $terms ) || is_wp_error( $terms ) ) {
 			return '';
 		}
+		usort(
+			$terms,
+			static function ( $a, $b ) {
+				$depth = count( get_ancestors( $b->term_id, 'product_cat' ) ) - count( get_ancestors( $a->term_id, 'product_cat' ) );
+				return $depth ? $depth : ( $a->term_id <=> $b->term_id );
+			}
+		);
 
 		foreach ( $terms as $term ) {
 			$candidates = array_merge( array( $term->term_id ), get_ancestors( $term->term_id, 'product_cat' ) );
 			foreach ( $candidates as $candidate_id ) {
 				$status = (string) get_term_meta( (int) $candidate_id, self::TERM_META_STATUS, true );
-				if ( self::is_valid_status( $status ) && 'standard' !== $status ) {
+				if ( self::is_valid_status( $status ) ) {
 					return $status;
 				}
 			}
 		}
 
 		return '';
+	}
+
+	public function render_variation_field( $loop, $data, $variation ): void {
+		unset( $data );
+		wp_nonce_field( 'wlr_save_variation_status', 'wlr_variation_status_nonce', false );
+		woocommerce_wp_select(
+			array(
+				'id'            => 'wlr_variation_status_' . $loop,
+				'name'          => 'wlr_variation_status[' . $loop . ']',
+				'label'         => __( 'Recesso della variazione', 'woo-legal-returns' ),
+				'value'         => self::get_raw_product_status( $variation->ID ),
+				'options'       => array( '' => __( 'Eredita dal prodotto', 'woo-legal-returns' ) ) + self::get_status_options(),
+				'wrapper_class' => 'form-row form-row-full',
+			)
+		);
+	}
+
+	public function save_variation_field( int $variation_id, int $loop ): void {
+		if ( ! current_user_can( 'edit_product', $variation_id )
+			|| ! isset( $_POST['wlr_variation_status_nonce'], $_POST['wlr_variation_status'][ $loop ] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wlr_variation_status_nonce'] ) ), 'wlr_save_variation_status' ) ) {
+			return;
+		}
+		$status = sanitize_key( wp_unslash( $_POST['wlr_variation_status'][ $loop ] ) );
+		if ( '' === $status ) {
+			delete_post_meta( $variation_id, self::META_STATUS );
+			delete_post_meta( $variation_id, self::LEGACY_NO_RETURN );
+			delete_post_meta( $variation_id, self::LEGACY_REASON );
+		} elseif ( self::is_valid_status( $status ) ) {
+			update_post_meta( $variation_id, self::META_STATUS, $status );
+		}
+	}
+
+	public function snapshot_item( $item, $key = '', $values = array(), $order = null ): void {
+		unset( $key, $values, $order );
+		if ( ! $item instanceof WC_Order_Item_Product || $item->get_meta( self::META_STATUS ) ) {
+			return;
+		}
+		$product = $item->get_product();
+		$status  = $product ? self::get_product_withdrawal_status( $product->get_id() ) : 'standard';
+		$item->update_meta_data( self::META_STATUS, $status );
+		$type = 'digital_content' === $status ? 'digital' : ( in_array( $status, array( 'early_service', 'dated_service' ), true ) ? 'service' : ( $product && $product->is_virtual() ? ( $product->is_downloadable() ? 'digital' : 'service' ) : 'goods' ) );
+		$item->update_meta_data( '_wlr_contract_type', $type );
+		$item->update_meta_data( '_wlr_product_sku', $product ? $product->get_sku() : '' );
+	}
+
+	public function snapshot_block_order( WC_Order $order ): void {
+		foreach ( $order->get_items() as $item ) {
+			$this->snapshot_item( $item );
+			$item->save();
+		}
+	}
+
+	public static function get_item_status( WC_Order_Item_Product $item ): string {
+		$status = (string) $item->get_meta( self::META_STATUS );
+		if ( self::is_valid_status( $status ) ) {
+			return $status;
+		}
+		$product = $item->get_product();
+		return $product ? self::get_product_withdrawal_status( $product->get_id() ) : 'standard';
+	}
+
+	public static function get_item_contract_type( WC_Order_Item_Product $item ): string {
+		$type = (string) $item->get_meta( '_wlr_contract_type' );
+		if ( in_array( $type, array( 'goods', 'digital', 'service' ), true ) ) {
+			return $type;
+		}
+		$status = self::get_item_status( $item );
+		if ( 'digital_content' === $status ) {
+			return 'digital';
+		}
+		if ( in_array( $status, array( 'early_service', 'dated_service' ), true ) ) {
+			return 'service';
+		}
+		$product = $item->get_product();
+		return $product && $product->is_virtual() ? ( $product->is_downloadable() ? 'digital' : 'service' ) : 'goods';
+	}
+
+	public static function is_item_excluded( WC_Order_Item_Product $item, WC_Order $order ): bool {
+		$status = self::get_item_status( $item );
+		if ( 'digital_content' === $status ) {
+			return 'yes' === $order->get_meta( '_wlr_consent_digital_accepted' ) && 'yes' === $order->get_meta( '_wlr_consent_digital_loss_acknowledged' ) && 'yes' === $item->get_meta( '_wlr_execution_started' ) && 'yes' === $item->get_meta( '_wlr_confirmation_provided' );
+		}
+		if ( 'early_service' === $status ) {
+			return 'yes' === $order->get_meta( '_wlr_consent_service_accepted' ) && 'yes' === $order->get_meta( '_wlr_consent_service_loss_acknowledged' ) && 'yes' === $item->get_meta( '_wlr_service_completed' );
+		}
+		if ( in_array( $status, array( 'sealed_hygiene', 'sealed_media', 'mixed_goods' ), true ) ) {
+			return 'yes' === $item->get_meta( '_wlr_exception_condition_met' );
+		}
+		return self::is_excluded_status( $status );
+	}
+
+	public function render_order_facts( WC_Order $order ): void {
+		wp_nonce_field( 'wlr_order_facts', 'wlr_order_facts_nonce' );
+		echo '<div class="wlr-order-facts"><h4>' . esc_html__( 'Recesso: fatti verificati', 'woo-legal-returns' ) . '</h4>';
+		echo '<p><label>' . esc_html__( 'Ricezione dell’ultimo bene (data effettiva)', 'woo-legal-returns' ) . ' <input type="date" name="wlr_received_date" value="' . esc_attr( $order->get_meta( '_wlr_received_date' ) ) . '"></label></p>';
+		echo '<p><label><input type="checkbox" name="wlr_information_complete" value="yes" ' . checked( 'yes', $order->get_meta( '_wlr_withdrawal_information_complete' ), false ) . '> ' . esc_html__( 'Informativa sul recesso completa e fornita prima della conclusione del contratto', 'woo-legal-returns' ) . '</label></p>';
+		echo '<p><label>' . esc_html__( 'Festività applicabili (date YYYY-MM-DD, una per riga)', 'woo-legal-returns' ) . '<textarea name="wlr_deadline_holidays">' . esc_textarea( implode( "\n", (array) $order->get_meta( '_wlr_deadline_holidays' ) ) ) . '</textarea></label></p>';
+		echo '<p><label><input type="checkbox" name="wlr_calendar_verified" value="yes" ' . checked( 'yes', $order->get_meta( '_wlr_deadline_calendar_verified' ), false ) . '> ' . esc_html__( 'Calendario delle festività verificato per questo ordine', 'woo-legal-returns' ) . '</label></p>';
+		foreach ( $order->get_items() as $id => $item ) {
+			if ( ! $item instanceof WC_Order_Item_Product ) {
+				continue;
+			}
+			$status = self::get_item_status( $item );
+			$fields = array();
+			if ( 'digital_content' === $status ) {
+				$fields['_wlr_execution_started']     = __( 'Esecuzione digitale iniziata', 'woo-legal-returns' );
+				$fields['_wlr_confirmation_provided'] = __( 'Conferma del consenso e della perdita del diritto fornita su supporto durevole', 'woo-legal-returns' );
+			} elseif ( 'early_service' === $status ) {
+				$fields['_wlr_service_completed'] = __( 'Servizio interamente eseguito', 'woo-legal-returns' );
+			} elseif ( in_array( $status, array( 'sealed_hygiene', 'sealed_media', 'mixed_goods' ), true ) ) {
+				$fields['_wlr_exception_condition_met'] = __( 'Apertura del sigillo / mescolamento verificato', 'woo-legal-returns' );
+			}
+			foreach ( $fields as $key => $label ) {
+				echo '<p><label><input type="hidden" name="wlr_item_facts[' . esc_attr( $id ) . '][' . esc_attr( $key ) . ']" value="no"><input type="checkbox" name="wlr_item_facts[' . esc_attr( $id ) . '][' . esc_attr( $key ) . ']" value="yes" ' . checked( 'yes', $item->get_meta( $key ), false ) . '> ' . esc_html( $item->get_name() . ': ' . $label ) . '</label></p>';
+			}
+		}
+		echo '</div>';
+	}
+
+	public function save_order_facts( int $order_id ): void {
+		if ( ! current_user_can( 'edit_shop_order', $order_id ) || ! isset( $_POST['wlr_order_facts_nonce'] )
+			|| ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['wlr_order_facts_nonce'] ) ), 'wlr_order_facts' ) ) {
+			return;
+		}
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return;
+		}
+		$date   = sanitize_text_field( wp_unslash( $_POST['wlr_received_date'] ?? '' ) );
+		$parsed = DateTimeImmutable::createFromFormat( '!Y-m-d', $date );
+		$order->update_meta_data( '_wlr_received_date', $parsed && $date === $parsed->format( 'Y-m-d' ) ? $date : '' );
+		$order->update_meta_data( '_wlr_withdrawal_information_complete', isset( $_POST['wlr_information_complete'] ) ? 'yes' : 'no' );
+		$holidays = preg_split( '/[\s,;]+/', sanitize_textarea_field( wp_unslash( $_POST['wlr_deadline_holidays'] ?? '' ) ) );
+		$holidays = array_values(
+			array_filter(
+				$holidays,
+				static function ( $holiday ) {
+					$date = DateTimeImmutable::createFromFormat( '!Y-m-d', $holiday );
+					return $date && $holiday === $date->format( 'Y-m-d' );
+				}
+			)
+		);
+		$order->update_meta_data( '_wlr_deadline_holidays', $holidays );
+		$order->update_meta_data( '_wlr_deadline_calendar_verified', isset( $_POST['wlr_calendar_verified'] ) ? 'yes' : 'no' );
+		foreach ( $order->get_items() as $id => $item ) {
+			foreach ( array( '_wlr_execution_started', '_wlr_confirmation_provided', '_wlr_service_completed', '_wlr_exception_condition_met' ) as $key ) {
+				if ( isset( $_POST['wlr_item_facts'][ $id ][ $key ] ) ) {
+					$value = sanitize_key( wp_unslash( $_POST['wlr_item_facts'][ $id ][ $key ] ) );
+					$item->update_meta_data( $key, 'yes' === $value ? 'yes' : 'no' );
+				}
+			}
+			$item->save();
+		}
+		$order->save();
 	}
 
 	private static function map_legacy_reason( string $reason ): string {
