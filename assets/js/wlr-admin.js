@@ -4,6 +4,10 @@
 ( function ( $ ) {
 	'use strict';
 
+	$( '#wlr_new_status' ).on( 'change', function () {
+		$( '#wlr_admin_note' ).prop( 'required', this.value === 'wlr-rejected' );
+	} ).trigger( 'change' );
+
 	$( '#wlr-update-status-form' ).on( 'submit', function ( e ) {
 		e.preventDefault();
 
@@ -12,6 +16,12 @@
 		var returnId = $( 'input[name=return_id]', this ).val();
 		var status   = $( '#wlr_new_status' ).val();
 		var note     = $( '#wlr_admin_note' ).val();
+
+		if ( status === 'wlr-rejected' && ! String( note || '' ).trim() ) {
+			$msg.removeClass( 'success' ).addClass( 'error' ).text( 'Per rifiutare la richiesta, inserisci il motivo del rifiuto nella nota al cliente.' );
+			$( '#wlr_admin_note' ).trigger( 'focus' );
+			return;
+		}
 
 		$btn.prop( 'disabled', true ).text( 'Salvataggio…' );
 		$msg.text( '' ).removeClass( 'success error' );

@@ -24,15 +24,113 @@ class WLR_Post_Type {
 
 	public static function instance(): self {
 		if ( null === self::$instance ) {
+			self::upgrade_deadline_policy();
 			self::$instance = new self();
 			self::$instance->hooks();
 		}
 		return self::$instance;
 	}
 
+	public static function upgrade_deadline_policy(): void {
+		if ( 'strict' !== get_option( 'wlr_deadline_mode', '' ) || '1.5.1' !== get_option( 'wlr_deadline_policy_version', '' ) ) {
+			// Apply the blocking policy once, also on upgrades without reactivation.
+			update_option( 'wlr_deadline_mode', 'strict' );
+			if ( 'strict' === get_option( 'wlr_deadline_mode' ) ) {
+				update_option( 'wlr_deadline_policy_version', '1.5.1' );
+			}
+		}
+	}
+
 	private function hooks(): void {
 		add_action( 'init', array( __CLASS__, 'register_post_type' ) );
 		add_action( 'init', array( __CLASS__, 'register_statuses' ) );
+		add_action( 'wlr_return_created', array( __CLASS__, 'reject_late_return' ), 5 );
+		add_action( 'wlr_reject_late_returns', array( __CLASS__, 'reject_late_returns_batch' ) );
+		if ( ! wp_next_scheduled( 'wlr_reject_late_returns' ) ) {
+			wp_schedule_event( time(), 'hourly', 'wlr_reject_late_returns' );
+		}
+	}
+
+	/** Reject only pending requests submitted after their recorded UTC deadline. */
+	public static function reject_late_return( int $return_id ): bool|WP_Error {
+		$lock = WLR_Lock::acquire( 'order:' . absint( get_post_meta( $return_id, '_wlr_order_id', true ) ) );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+		try {
+			$post = get_post( $return_id );
+			if ( ! $post || self::POST_TYPE !== $post->post_type || 'wlr-requested' !== $post->post_status ) {
+				return false;
+			}
+			$dates = array();
+			foreach ( array( '_wlr_submitted_at_utc', '_wlr_deadline_at' ) as $key ) {
+				$value = (string) get_post_meta( $return_id, $key, true );
+				if ( ! preg_match( '/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/D', $value ) ) {
+					return false;
+				}
+				$date  = DateTimeImmutable::createFromFormat( '!Y-m-d H:i:s', $value, new DateTimeZone( 'UTC' ) );
+				if ( ! $date || $date->format( 'Y-m-d H:i:s' ) !== $value ) {
+					// Missing evidence requires manual review, never infer lateness from today's date.
+					return false;
+				}
+				$dates[] = $date->getTimestamp();
+			}
+			if ( $dates[0] <= $dates[1] ) {
+				return false;
+			}
+			$result = self::persist_status( $return_id, 'wlr-rejected', __( 'Richiesta rifiutata automaticamente: inviata oltre il termine di recesso previsto per l’ordine.', 'woo-legal-returns' ), 0 );
+		} finally {
+			self::$order_returns = array();
+			WLR_Lock::release( $lock );
+		}
+		if ( true === $result ) {
+			try {
+				do_action( 'wlr_return_status_changed', $return_id, 'wlr-rejected', 'wlr-requested' );
+			} catch ( Throwable $error ) {
+				wc_get_logger()->error( $error->getMessage(), array( 'source' => 'woo-legal-returns' ) );
+			}
+		}
+		return $result;
+	}
+
+	/** Visit existing pending requests in bounded batches without skipping changing statuses. */
+	public static function reject_late_returns_batch( int $after_id = 0 ): void {
+		add_filter( 'posts_where', array( __CLASS__, 'filter_late_returns_cursor' ), 10, 2 );
+		try {
+			$ids = get_posts( array(
+				'post_type'         => self::POST_TYPE,
+				'post_status'       => 'wlr-requested',
+				'fields'            => 'ids',
+				'posts_per_page'    => 100,
+				'orderby'           => 'ID',
+				'order'             => 'ASC',
+				'suppress_filters'  => false,
+				'wlr_late_after_id' => absint( $after_id ),
+			) );
+		} finally {
+			remove_filter( 'posts_where', array( __CLASS__, 'filter_late_returns_cursor' ), 10 );
+		}
+		foreach ( $ids as $id ) {
+			$result = self::reject_late_return( (int) $id );
+			if ( is_wp_error( $result ) ) {
+				wc_get_logger()->error( 'Auto-rejection #' . (int) $id . ': ' . $result->get_error_code(), array( 'source' => 'woo-legal-returns' ) );
+			}
+		}
+		if ( count( $ids ) === 100 ) {
+			$args = array( (int) end( $ids ) );
+			if ( ! wp_next_scheduled( 'wlr_reject_late_returns', $args ) ) {
+				wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'wlr_reject_late_returns', $args );
+			}
+		}
+	}
+
+	public static function filter_late_returns_cursor( string $where, $query ): string {
+		global $wpdb;
+		$after_id = $query->get( 'wlr_late_after_id' );
+		if ( null !== $after_id && '' !== $after_id && self::POST_TYPE === $query->get( 'post_type' ) ) {
+			$where .= $wpdb->prepare( " AND {$wpdb->posts}.ID > %d", absint( $after_id ) );
+		}
+		return $where;
 	}
 
 	public static function register_post_type(): void {
@@ -174,7 +272,7 @@ class WLR_Post_Type {
 			'statement'        => self::get_declaration_text(),
 			'items'            => $validation['items'],
 			'reason'           => $validation['reason'],
-			'reason_label'     => WLR_Customer_Account::instance()->get_return_reasons()[ $validation['reason'] ] ?? '',
+			'reason_label'     => self::get_reason_label( $validation['reason'] ),
 			'notes'            => $validation['notes'],
 			'submitted_at_utc' => $submitted_at_utc,
 			'trader'           => array_intersect_key( (array) get_option( 'wlr_setup_options', array() ), array_flip( array( 'trader_name', 'trader_address', 'trader_email', 'trader_phone' ) ) ),
@@ -238,12 +336,15 @@ class WLR_Post_Type {
 		}
 
 		$deadline = self::get_order_deadline_info( $order );
-		if ( self::deadline_is_strict() && ! empty( $deadline['reliable'] ) && $deadline['may_be_expired'] ) {
+		if ( self::deadline_is_strict() && empty( $deadline['timestamp'] ) ) {
+			return new WP_Error( 'wlr_missing_deadline', __( 'Non è possibile determinare il termine di recesso per questo ordine. Contatta il servizio clienti.', 'woo-legal-returns' ) );
+		}
+		if ( self::deadline_is_strict() && $deadline['may_be_expired'] ) {
 			return new WP_Error(
 				'wlr_expired',
 				sprintf(
 					/* translators: %d: number of days. */
-					__( 'Il periodo indicativo di recesso di %d giorni risulta scaduto.', 'woo-legal-returns' ),
+					__( 'Il termine di recesso di %d giorni, inclusa l’eventuale tolleranza configurata, è scaduto per questo ordine.', 'woo-legal-returns' ),
 					WLR_RETURN_DAYS
 				)
 			);
@@ -271,10 +372,50 @@ class WLR_Post_Type {
 	}
 
 	public static function update_status( int $return_id, string $status, string $note = '' ): bool {
+		return true === self::update_status_result( $return_id, $status, $note );
+	}
+
+	/** Delete only withdrawal requests, serialising quantity changes with the order. */
+	public static function delete_return( int $return_id, bool $permanent = false ): bool|WP_Error {
+		$lock = WLR_Lock::acquire( 'order:' . absint( get_post_meta( $return_id, '_wlr_order_id', true ) ) );
+		if ( is_wp_error( $lock ) ) {
+			return $lock;
+		}
+		try {
+			$post = get_post( $return_id );
+			if ( ! $post || self::POST_TYPE !== $post->post_type ) {
+				return new WP_Error( 'wlr_invalid_return', __( 'Richiesta di reso non trovata.', 'woo-legal-returns' ) );
+			}
+			$trash_disabled = defined( 'EMPTY_TRASH_DAYS' ) && 0 === (int) EMPTY_TRASH_DAYS;
+			if ( $permanent && 'trash' !== $post->post_status && ! $trash_disabled ) {
+				return new WP_Error( 'wlr_not_trashed', __( 'Sposta prima la richiesta nel cestino per eliminarla definitivamente.', 'woo-legal-returns' ) );
+			}
+			if ( ! $permanent && $trash_disabled ) {
+				return new WP_Error( 'wlr_trash_disabled', __( 'Il cestino di WordPress è disattivato. Usa Elimina definitivamente per confermare la cancellazione.', 'woo-legal-returns' ) );
+			}
+			if ( ! $permanent && 'trash' === $post->post_status ) {
+				return true;
+			}
+			$result = $permanent ? wp_delete_post( $return_id, true ) : wp_trash_post( $return_id );
+			$saved  = get_post( $return_id );
+			if ( ! $result || is_wp_error( $result ) || ( $permanent ? null !== $saved : ! $saved || 'trash' !== $saved->post_status ) ) {
+				return new WP_Error( 'wlr_delete_failed', __( 'Eliminazione della richiesta non riuscita. Ricarica la pagina e riprova.', 'woo-legal-returns' ) );
+			}
+			wp_clear_scheduled_hook( 'wlr_retry_receipt', array( $return_id ) );
+			return true;
+		} finally {
+			self::$order_returns = array();
+			WLR_Lock::release( $lock );
+		}
+	}
+
+	/** Update a status with a diagnostic, preserving the legacy boolean API. */
+	public static function update_status_result( int $return_id, string $status, string $note = '' ): bool|WP_Error {
+		$note     = sanitize_textarea_field( $note );
 		$order_id = absint( get_post_meta( $return_id, '_wlr_order_id', true ) );
 		$lock     = WLR_Lock::acquire( 'order:' . $order_id );
 		if ( is_wp_error( $lock ) ) {
-			return false;
+			return $lock;
 		}
 		try {
 			self::$order_returns = array();
@@ -284,7 +425,7 @@ class WLR_Post_Type {
 			self::$order_returns = array();
 			WLR_Lock::release( $lock );
 		}
-		if ( $result && $before && 'trash' !== $before->post_status && ( $before->post_status !== $status || '' !== trim( $note ) ) ) {
+		if ( true === $result && $before && 'trash' !== $before->post_status && ( $before->post_status !== $status || '' !== trim( $note ) ) ) {
 			try {
 				do_action( 'wlr_return_status_changed', $return_id, $status, $before->post_status );
 			} catch ( Throwable $error ) {
@@ -294,27 +435,31 @@ class WLR_Post_Type {
 		return $result;
 	}
 
-	private static function persist_status( int $return_id, string $status, string $note ): bool {
+	private static function persist_status( int $return_id, string $status, string $note, ?int $actor_id = null ): bool|WP_Error {
 		if ( ! array_key_exists( $status, self::STATUSES ) ) {
-			return false;
+			return new WP_Error( 'wlr_invalid_status', __( 'Stato della richiesta non valido.', 'woo-legal-returns' ) );
 		}
 
 		$post = get_post( $return_id );
 		if ( ! $post || self::POST_TYPE !== $post->post_type ) {
-			return false;
+			return new WP_Error( 'wlr_invalid_return', __( 'Richiesta di reso non trovata.', 'woo-legal-returns' ) );
 		}
 		if ( $status === $post->post_status && '' === trim( $note ) ) {
 			return true;
 		}
 
 		if ( 'wlr-rejected' === $status && '' === trim( $note ) && ! in_array( $post->post_status, array( 'wlr-rejected', 'trash' ), true ) ) {
-			return false;
+			return new WP_Error( 'wlr_rejection_note_required', __( 'Per rifiutare la richiesta, inserisci il motivo del rifiuto nella nota al cliente.', 'woo-legal-returns' ) );
 		}
 		$reserving = array( 'wlr-requested', 'wlr-approved', 'wlr-refunded' );
 		if ( in_array( $status, $reserving, true ) && ! in_array( $post->post_status, $reserving, true ) ) {
 			$order = wc_get_order( absint( get_post_meta( $return_id, '_wlr_order_id', true ) ) );
-			if ( ! $order || is_wp_error( self::validate_items_for_order( $order, (array) get_post_meta( $return_id, '_wlr_items', true ) ) ) ) {
-				return false;
+			if ( ! $order ) {
+				return new WP_Error( 'wlr_invalid_order', __( 'Ordine non trovato.', 'woo-legal-returns' ) );
+			}
+			$items = self::validate_items_for_order( $order, (array) get_post_meta( $return_id, '_wlr_items', true ) );
+			if ( is_wp_error( $items ) ) {
+				return $items;
 			}
 		}
 
@@ -322,11 +467,16 @@ class WLR_Post_Type {
 			array(
 				'ID'          => $return_id,
 				'post_status' => $status,
-			)
+			),
+			true
 		);
 
 		if ( ! $updated || is_wp_error( $updated ) ) {
-			return false;
+			return new WP_Error( 'wlr_status_write_failed', __( 'Salvataggio dello stato fallito. Riprova.', 'woo-legal-returns' ) );
+		}
+		$saved = get_post( $return_id );
+		if ( ! $saved || $status !== $saved->post_status ) {
+			return new WP_Error( 'wlr_status_not_saved', __( 'Lo stato richiesto non risulta salvato. Ricarica la pagina e riprova.', 'woo-legal-returns' ) );
 		}
 
 		update_post_meta( $return_id, '_wlr_status_changed_at', current_time( 'mysql', true ) );
@@ -336,7 +486,7 @@ class WLR_Post_Type {
 		$history[] = array(
 			'status'  => $status,
 			'note'    => sanitize_textarea_field( $note ),
-			'user_id' => get_current_user_id(),
+			'user_id' => $actor_id ?? get_current_user_id(),
 			'date'    => current_time( 'mysql' ),
 		);
 		update_post_meta( $return_id, '_wlr_history', $history );
@@ -466,13 +616,9 @@ class WLR_Post_Type {
 	}
 
 	public static function is_within_return_window( WC_Order $order ): bool {
-		if ( ! self::deadline_is_strict() ) {
-			return true;
-		}
-
 		$deadline = self::get_order_deadline_info( $order );
 
-		return empty( $deadline['reliable'] ) || ! $deadline['may_be_expired'];
+		return ! empty( $deadline['timestamp'] ) && ! $deadline['may_be_expired'];
 	}
 
 	public static function get_order_deadline_info( WC_Order $order ): array {
@@ -493,14 +639,15 @@ class WLR_Post_Type {
 			$reliable    = $date && $date->format( 'Y-m-d' ) === $received;
 			$date        = $reliable ? $date : null;
 			$basis_label = 'received';
-		} elseif ( ! $has_goods ) {
+		}
+		if ( ! $date && ! $has_goods ) {
 			$date        = $order->get_date_created();
 			$basis_label = 'contract';
 			$reliable    = (bool) $date;
-		} elseif ( 'created' === $basis ) {
+		} elseif ( ! $date && 'created' === $basis ) {
 			$date        = $order->get_date_created();
 			$basis_label = 'created';
-		} else {
+		} elseif ( ! $date ) {
 			$date        = $order->get_date_completed() ?? $order->get_date_paid() ?? $order->get_date_created();
 			$basis_label = 'completed_or_paid';
 		}
@@ -539,7 +686,14 @@ class WLR_Post_Type {
 	}
 
 	public static function deadline_is_strict(): bool {
-		return 'strict' === get_option( 'wlr_deadline_mode', 'advisory' );
+		return true;
+	}
+
+	public static function get_reason_label( string $reason ): string {
+		if ( '' === $reason ) {
+			return __( 'Non indicato (facoltativo)', 'woo-legal-returns' );
+		}
+		return WLR_Customer_Account::instance()->get_return_reasons()[ $reason ] ?? $reason;
 	}
 
 	public static function get_eligible_order_statuses(): array {

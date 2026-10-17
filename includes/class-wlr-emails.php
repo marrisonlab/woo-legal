@@ -447,10 +447,7 @@ class WLR_Emails {
 			'is_guest'                => $is_guest,
 			'customer_email'          => $customer_obj->user_email,
 			'reason'                  => get_post_meta( $return_id, '_wlr_reason', true ),
-			'reason_label'            => $snapshot['reason_label'] ?? ( static function ( string $key ): string {
-				$r = WLR_Customer_Account::instance()->get_return_reasons();
-				return $r[ $key ] ?? $key;
-			} )( get_post_meta( $return_id, '_wlr_reason', true ) ),
+			'reason_label'            => ! empty( $snapshot['reason_label'] ) ? $snapshot['reason_label'] : WLR_Post_Type::get_reason_label( (string) ( $snapshot['reason'] ?? get_post_meta( $return_id, '_wlr_reason', true ) ) ),
 			'items'                   => $snapshot['items'] ?? $return_items,
 			'notes'                   => $snapshot['notes'] ?? $post->post_content,
 			'status'                  => $post->post_status,

@@ -194,7 +194,6 @@ class WLR_Admin {
 		);
 		$withdrawal_page   = absint( get_option( 'wlr_withdrawal_page_id', 0 ) );
 		$notify_emails     = (string) get_option( 'wlr_notify_emails', get_option( 'admin_email' ) );
-		$deadline_mode     = (string) get_option( 'wlr_deadline_mode', 'advisory' );
 		$deadline_basis    = (string) get_option( 'wlr_deadline_basis', 'completed_or_paid' );
 		$grace_days        = absint( get_option( 'wlr_deadline_grace_days', 0 ) );
 		$eligible_statuses = WLR_Post_Type::get_eligible_order_statuses();
@@ -264,10 +263,8 @@ class WLR_Admin {
 					<tr>
 						<th scope="row"><label for="wlr_deadline_mode"><?php esc_html_e( 'Termine 14 giorni', 'woo-legal-returns' ); ?></label></th>
 						<td>
-							<select name="wlr_deadline_mode" id="wlr_deadline_mode">
-								<option value="advisory" <?php selected( $deadline_mode, 'advisory' ); ?>><?php esc_html_e( 'Avviso e verifica manuale', 'woo-legal-returns' ); ?></option>
-								<option value="strict" <?php selected( $deadline_mode, 'strict' ); ?>><?php esc_html_e( 'Blocca oltre termine', 'woo-legal-returns' ); ?></option>
-							</select>
+							<strong><?php esc_html_e( 'Blocco oltre termine sempre attivo', 'woo-legal-returns' ); ?></strong>
+							<p class="description"><?php esc_html_e( 'Gli ordini scaduti non sono selezionabili e il server impedisce l’invio. Le richieste comunque registrate dopo la scadenza vengono rifiutate automaticamente.', 'woo-legal-returns' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -277,7 +274,7 @@ class WLR_Admin {
 								<option value="completed_or_paid" <?php selected( $deadline_basis, 'completed_or_paid' ); ?>><?php esc_html_e( 'Completamento/pagamento ordine', 'woo-legal-returns' ); ?></option>
 								<option value="created" <?php selected( $deadline_basis, 'created' ); ?>><?php esc_html_e( 'Data creazione ordine', 'woo-legal-returns' ); ?></option>
 							</select>
-							<p class="description"><?php esc_html_e( 'Queste basi producono una stima. Il blocco strict richiede una data attendibile, l’informativa completa e il calendario verificato, registrati nell’ordine.', 'woo-legal-returns' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Per i beni si usa la data di ricezione registrata nell’ordine. Se manca, si usa questa decorrenza: la scadenza rimane una stima, ma il blocco si applica comunque. Per servizi e contenuti digitali si usa la data del contratto.', 'woo-legal-returns' ); ?></p>
 						</td>
 					</tr>
 					<tr>
@@ -493,8 +490,7 @@ class WLR_Admin {
 		}
 		update_option( 'wlr_eligible_order_statuses', $statuses );
 
-		$deadline_mode = sanitize_key( wp_unslash( $_POST['wlr_deadline_mode'] ?? 'advisory' ) );
-		update_option( 'wlr_deadline_mode', in_array( $deadline_mode, array( 'advisory', 'strict' ), true ) ? $deadline_mode : 'advisory' );
+		update_option( 'wlr_deadline_mode', 'strict' );
 
 		$deadline_basis = sanitize_key( wp_unslash( $_POST['wlr_deadline_basis'] ?? 'completed_or_paid' ) );
 		update_option( 'wlr_deadline_basis', in_array( $deadline_basis, array( 'completed_or_paid', 'created' ), true ) ? $deadline_basis : 'completed_or_paid' );
@@ -526,6 +522,9 @@ class WLR_Admin {
 		if ( ! array_key_exists( $new_status, WLR_Post_Type::STATUSES ) || empty( $return_ids ) ) {
 			wp_safe_redirect( admin_url( 'admin.php?page=wlr-returns&bulk_updated=0' ) );
 			exit;
+		}
+		if ( 'wlr-rejected' === $new_status && '' === trim( $note ) ) {
+			wp_die( esc_html__( 'Per rifiutare le richieste selezionate, inserisci il motivo del rifiuto nella nota al cliente.', 'woo-legal-returns' ) );
 		}
 
 		$updated = 0;
@@ -561,25 +560,13 @@ class WLR_Admin {
 		$return_id = absint( $_POST['return_id'] ?? 0 );
 		check_admin_referer( 'wlr_delete_return_' . $return_id );
 
-		$post = $return_id ? get_post( $return_id ) : null;
-		if ( ! $post || WLR_Post_Type::POST_TYPE !== $post->post_type ) {
-			wp_die( esc_html__( 'Richiesta non trovata.', 'woo-legal-returns' ) );
+		$permanent = '1' === (string) wp_unslash( $_POST['permanent'] ?? '' );
+		$result    = WLR_Post_Type::delete_return( $return_id, $permanent );
+		if ( is_wp_error( $result ) ) {
+			wp_die( esc_html( $result->get_error_message() ) );
 		}
 
-		$lock = WLR_Lock::acquire( 'order:' . absint( get_post_meta( $return_id, '_wlr_order_id', true ) ) );
-		if ( is_wp_error( $lock ) ) {
-			wp_die( esc_html( $lock->get_error_message() ) );
-		}
-		try {
-			if ( ! wp_trash_post( $return_id ) ) {
-				wp_die( esc_html__( 'Spostamento nel cestino fallito.', 'woo-legal-returns' ) );
-			}
-			wp_clear_scheduled_hook( 'wlr_retry_receipt', array( $return_id ) );
-		} finally {
-			WLR_Lock::release( $lock );
-		}
-
-		wp_safe_redirect( admin_url( 'admin.php?page=wlr-returns&deleted=1' ) );
+		wp_safe_redirect( admin_url( $permanent ? 'admin.php?page=wlr-returns&status=trash&permanently_deleted=1' : 'admin.php?page=wlr-returns&deleted=1' ) );
 		exit;
 	}
 
@@ -608,9 +595,9 @@ class WLR_Admin {
 				return;
 			}
 
-			$ok = WLR_Post_Type::update_status( $return_id, $new_status, $note );
-			if ( ! $ok ) {
-				wp_send_json_error( array( 'message' => __( 'Aggiornamento fallito.', 'woo-legal-returns' ) ) );
+			$ok = WLR_Post_Type::update_status_result( $return_id, $new_status, $note );
+			if ( is_wp_error( $ok ) ) {
+				wp_send_json_error( array( 'message' => $ok->get_error_message(), 'code' => $ok->get_error_code() ) );
 				return;
 			}
 
@@ -641,8 +628,9 @@ class WLR_Admin {
 		$new_status = sanitize_key( wp_unslash( $_POST['status'] ?? '' ) );
 		$note       = sanitize_textarea_field( wp_unslash( $_POST['note'] ?? '' ) );
 
-		if ( ! WLR_Post_Type::update_status( $return_id, $new_status, $note ) ) {
-			wp_die( esc_html__( 'Aggiornamento fallito. Se rifiuti una richiesta devi indicare una nota per il cliente.', 'woo-legal-returns' ) );
+		$result = WLR_Post_Type::update_status_result( $return_id, $new_status, $note );
+		if ( is_wp_error( $result ) ) {
+			wp_die( esc_html( $result->get_error_message() ) );
 		}
 
 		wp_safe_redirect(

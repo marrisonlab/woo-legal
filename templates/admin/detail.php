@@ -8,6 +8,7 @@
 defined( 'ABSPATH' ) || exit;
 
 $back_url = admin_url( 'admin.php?page=wlr-returns' );
+$wlr_permanent_delete = 'trash' === $post->post_status || ( defined( 'EMPTY_TRASH_DAYS' ) && 0 === (int) EMPTY_TRASH_DAYS );
 ?>
 
 <div class="wrap wlr-admin-wrap">
@@ -113,7 +114,7 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 							<?php endif; ?>
 						<tr>
 							<th><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th>
-							<td><?php echo esc_html( $reasons[ $reason ] ?? $reason ); ?></td>
+							<td><?php echo esc_html( WLR_Post_Type::get_reason_label( (string) $reason ) ); ?></td>
 						</tr>
 						<?php if ( $post->post_content ) : ?>
 						<tr>
@@ -270,6 +271,7 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 			</div>
 
 			<!-- Aggiorna stato -->
+			<?php if ( 'trash' !== $post->post_status ) : ?>
 			<div class="postbox">
 				<h2 class="hndle"><?php esc_html_e( 'Aggiorna stato', 'woo-legal-returns' ); ?></h2>
 				<div class="inside">
@@ -294,7 +296,8 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 
 						<p>
 							<label for="wlr_admin_note"><strong><?php esc_html_e( 'Nota (visibile al cliente via email)', 'woo-legal-returns' ); ?></strong></label>
-							<textarea name="note" id="wlr_admin_note" class="widefat" rows="3"></textarea>
+							<textarea name="note" id="wlr_admin_note" class="widefat" rows="3" aria-describedby="wlr-note-help"></textarea>
+							<span id="wlr-note-help" class="description"><?php esc_html_e( 'Per passare a Rifiutato è obbligatorio indicare il motivo del rifiuto nella nota.', 'woo-legal-returns' ); ?></span>
 						</p>
 
 						<p>
@@ -304,25 +307,27 @@ $back_url = admin_url( 'admin.php?page=wlr-returns' );
 						</p>
 					</form>
 
-					<div id="wlr-admin-messages"></div>
+					<div id="wlr-admin-messages" role="status" aria-live="polite"></div>
 
 				</div>
 			</div>
+			<?php endif; ?>
 
 			<!-- Elimina richiesta -->
 			<div class="postbox">
 				<h2 class="hndle"><?php esc_html_e( 'Elimina richiesta', 'woo-legal-returns' ); ?></h2>
 				<div class="inside">
 					<p style="color:#666;font-size:12px;margin-top:0;">
-						<?php esc_html_e( 'Sposta la richiesta nel cestino. Reversibile dal cestino di WordPress.', 'woo-legal-returns' ); ?>
+						<?php echo esc_html( $wlr_permanent_delete ? __( 'Elimina definitivamente la richiesta e i relativi dati. Questa operazione non è reversibile.', 'woo-legal-returns' ) : __( 'Sposta la richiesta nel cestino. Puoi ripristinarla dalla sezione Cestino di Resi UE.', 'woo-legal-returns' ) ); ?>
 					</p>
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>"
-						onsubmit="return confirm('<?php echo esc_js( __( 'Sei sicuro di voler eliminare questa richiesta di reso?', 'woo-legal-returns' ) ); ?>')">
+						onsubmit="return confirm('<?php echo esc_js( $wlr_permanent_delete ? __( 'Eliminare definitivamente questa richiesta? Non potrai ripristinarla.', 'woo-legal-returns' ) : __( 'Spostare questa richiesta nel cestino?', 'woo-legal-returns' ) ); ?>')">
 						<?php wp_nonce_field( 'wlr_delete_return_' . $return_id ); ?>
 						<input type="hidden" name="action" value="wlr_delete_return">
 						<input type="hidden" name="return_id" value="<?php echo esc_attr( $return_id ); ?>">
+						<input type="hidden" name="permanent" value="<?php echo $wlr_permanent_delete ? '1' : '0'; ?>">
 						<button type="submit" class="button button-link-delete" style="color:#b32d2e;">
-							<?php esc_html_e( 'Sposta nel cestino', 'woo-legal-returns' ); ?>
+							<?php echo esc_html( $wlr_permanent_delete ? __( 'Elimina definitivamente', 'woo-legal-returns' ) : __( 'Elimina (sposta nel cestino)', 'woo-legal-returns' ) ); ?>
 						</button>
 					</form>
 				</div>

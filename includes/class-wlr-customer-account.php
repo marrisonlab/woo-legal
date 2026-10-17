@@ -137,7 +137,7 @@ class WLR_Customer_Account {
 		wp_enqueue_script( 'wlr-frontend' );
 
 		if ( ! WLR_Post_Type::is_within_return_window( $order ) ) {
-			echo '<p class="woocommerce-message woocommerce-message--info">' . esc_html__( 'Il periodo indicativo di recesso risulta scaduto per questo ordine.', 'woo-legal-returns' ) . '</p>';
+			echo '<p class="woocommerce-message woocommerce-message--info">' . esc_html__( 'La richiesta di recesso non è disponibile per questo ordine: il termine è scaduto o non è determinabile. Contatta il servizio clienti.', 'woo-legal-returns' ) . '</p>';
 			return;
 		}
 
@@ -301,9 +301,11 @@ class WLR_Customer_Account {
 
 			wp_send_json_success(
 				array(
-					'message'   => get_post_meta( $result, '_wlr_receipt_sent', true )
+					'message'   => 'wlr-rejected' === get_post_status( $result )
+						? __( 'Richiesta rifiutata automaticamente: inviata oltre il termine di recesso previsto per l’ordine.', 'woo-legal-returns' )
+						: ( get_post_meta( $result, '_wlr_receipt_sent', true )
 						? __( 'Dichiarazione registrata. La ricevuta è stata affidata al servizio email.', 'woo-legal-returns' )
-						: __( 'Dichiarazione registrata. La ricevuta email è in attesa di invio; il venditore può reinviarla.', 'woo-legal-returns' ),
+						: __( 'Dichiarazione registrata. La ricevuta email è in attesa di invio; il venditore può reinviarla.', 'woo-legal-returns' ) ),
 					'return_id' => $result,
 					'redirect'  => $redirect,
 				)
@@ -343,7 +345,7 @@ class WLR_Customer_Account {
 			}
 
 			if ( ! WLR_Post_Type::is_within_return_window( $order ) ) {
-				wp_send_json_error( array( 'message' => __( 'Il periodo indicativo di recesso risulta scaduto per questo ordine.', 'woo-legal-returns' ) ) );
+				wp_send_json_error( array( 'message' => __( 'La richiesta di recesso non è disponibile per questo ordine: il termine è scaduto o non è determinabile. Contatta il servizio clienti.', 'woo-legal-returns' ) ) );
 				return;
 			}
 
@@ -401,7 +403,7 @@ class WLR_Customer_Account {
 
 	public function maybe_render_withdrawal_notice( int $order_id ): void {
 		$order = wc_get_order( $order_id );
-		if ( ! $order || ! $this->order_has_items( $order ) ) {
+		if ( ! $order || ! $this->order_has_items( $order ) || ! WLR_Post_Type::is_within_return_window( $order ) ) {
 			return;
 		}
 
@@ -599,7 +601,6 @@ class WLR_Customer_Account {
 		$order    = $validation['order'];
 		$items    = $validation['items'];
 		$deadline = $validation['deadline'];
-		$reasons  = $this->get_return_reasons();
 
 		ob_start();
 		?>
@@ -612,7 +613,7 @@ class WLR_Customer_Account {
 				<tr><th><?php esc_html_e( 'Nome', 'woo-legal-returns' ); ?></th><td><?php echo esc_html( $validation['customer_name'] ); ?></td></tr>
 				<tr><th><?php esc_html_e( 'Dichiarazione', 'woo-legal-returns' ); ?></th><td><?php echo esc_html( WLR_Post_Type::get_declaration_text() ); ?></td></tr>
 				<tr><th><?php esc_html_e( 'Note', 'woo-legal-returns' ); ?></th><td><?php echo esc_html( $validation['notes'] ); ?></td></tr>
-				<tr><th><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th><td><?php echo esc_html( $reasons[ $validation['reason'] ] ?? $validation['reason'] ); ?></td></tr>
+				<tr><th><?php esc_html_e( 'Motivo', 'woo-legal-returns' ); ?></th><td><?php echo esc_html( WLR_Post_Type::get_reason_label( $validation['reason'] ) ); ?></td></tr>
 				<?php if ( ! empty( $deadline['may_be_expired'] ) ) : ?>
 					<tr><th><?php esc_html_e( 'Verifica termini', 'woo-legal-returns' ); ?></th><td><?php esc_html_e( 'La finestra indicativa risulta oltre i 14 giorni e sara verificata dal venditore rispetto alla data effettiva di ricezione.', 'woo-legal-returns' ); ?></td></tr>
 				<?php endif; ?>

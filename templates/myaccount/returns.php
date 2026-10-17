@@ -64,7 +64,6 @@ defined( 'ABSPATH' ) || exit;
 					$return_order  = wc_get_order( $order_id );
 					$reason        = get_post_meta( $return->ID, '_wlr_reason', true );
 					$created_at    = get_post_meta( $return->ID, '_wlr_created_at', true );
-					$reasons       = ( WLR_Customer_Account::instance() )->get_return_reasons();
 					$return_status = $return->post_status;
 					?>
 				<tr>
@@ -89,7 +88,7 @@ defined( 'ABSPATH' ) || exit;
 						</span>
 					</td>
 					<td data-title="<?php esc_attr_e( 'Motivo', 'woo-legal-returns' ); ?>">
-						<?php echo esc_html( $reasons[ $reason ] ?? $reason ); ?>
+						<?php echo esc_html( WLR_Post_Type::get_reason_label( (string) $reason ) ); ?>
 					</td>
 				</tr>
 				<?php endforeach; ?>

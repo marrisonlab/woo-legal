@@ -24,6 +24,10 @@ $total_pages  = ceil( $total / $wlr_per_page );
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Stato aggiornato con successo.', 'woo-legal-returns' ); ?></p></div>
 	<?php endif; ?>
 	<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only success notice. ?>
+	<?php if ( isset( $_GET['permanently_deleted'] ) ) : ?>
+		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Richiesta eliminata definitivamente.', 'woo-legal-returns' ); ?></p></div>
+	<?php endif; ?>
+	<?php // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only success notice. ?>
 	<?php if ( isset( $_GET['deleted'] ) ) : ?>
 		<div class="notice notice-success is-dismissible"><p><?php esc_html_e( 'Richiesta spostata nel cestino.', 'woo-legal-returns' ); ?></p></div>
 	<?php endif; ?>
@@ -90,7 +94,7 @@ $total_pages  = ceil( $total / $wlr_per_page );
 						<option value="<?php echo esc_attr( $slug ); ?>"><?php echo esc_html( $label ); ?></option>
 					<?php endforeach; ?>
 				</select>
-				<input type="text" name="bulk_note" class="regular-text" placeholder="<?php esc_attr_e( 'Nota cliente opzionale', 'woo-legal-returns' ); ?>">
+				<input type="text" name="bulk_note" class="regular-text" placeholder="<?php esc_attr_e( 'Nota cliente (obbligatoria per rifiutare)', 'woo-legal-returns' ); ?>">
 				<?php submit_button( __( 'Applica', 'woo-legal-returns' ), 'action', '', false ); ?>
 			</div>
 			<br class="clear">
@@ -120,8 +124,7 @@ $total_pages  = ceil( $total / $wlr_per_page );
 					$order_id     = (int) get_post_meta( $return_post->ID, '_wlr_order_id', true );
 					$customer_id  = (int) get_post_meta( $return_post->ID, '_wlr_customer_id', true );
 					$reason_key   = get_post_meta( $return_post->ID, '_wlr_reason', true );
-					$_reasons     = WLR_Customer_Account::instance()->get_return_reasons();
-					$reason       = $_reasons[ $reason_key ] ?? $reason_key;
+					$reason       = WLR_Post_Type::get_reason_label( (string) $reason_key );
 					$created_at   = get_post_meta( $return_post->ID, '_wlr_created_at', true );
 					$return_order = wc_get_order( $order_id );
 					$customer     = get_userdata( $customer_id );
@@ -177,10 +180,15 @@ $total_pages  = ceil( $total / $wlr_per_page );
 							<?php echo esc_html( WLR_Post_Type::get_status_label( $return_post->post_status ) ); ?>
 						</span>
 					</td>
-					<td>
+					<td class="wlr-row-actions">
 						<a href="<?php echo esc_url( $detail_url ); ?>" class="button button-small">
 							<?php esc_html_e( 'Gestisci', 'woo-legal-returns' ); ?>
 						</a>
+						<?php $wlr_permanent_delete = 'trash' === $return_post->post_status || ( defined( 'EMPTY_TRASH_DAYS' ) && 0 === (int) EMPTY_TRASH_DAYS ); ?>
+						<button type="submit" form="wlr-delete-<?php echo esc_attr( $return_post->ID ); ?>" class="button button-small button-link-delete"
+							onclick="return confirm('<?php echo esc_js( $wlr_permanent_delete ? __( 'Eliminare definitivamente questa richiesta? Non potrai ripristinarla.', 'woo-legal-returns' ) : __( 'Spostare questa richiesta nel cestino?', 'woo-legal-returns' ) ); ?>')">
+							<?php echo esc_html( $wlr_permanent_delete ? __( 'Elimina definitivamente', 'woo-legal-returns' ) : __( 'Elimina', 'woo-legal-returns' ) ); ?>
+						</button>
 					</td>
 				</tr>
 				<?php endforeach; ?>
@@ -188,6 +196,15 @@ $total_pages  = ceil( $total / $wlr_per_page );
 		</tbody>
 	</table>
 	</form>
+	<?php foreach ( $posts as $return_post ) : ?>
+		<?php $wlr_permanent_delete = 'trash' === $return_post->post_status || ( defined( 'EMPTY_TRASH_DAYS' ) && 0 === (int) EMPTY_TRASH_DAYS ); ?>
+		<form id="wlr-delete-<?php echo esc_attr( $return_post->ID ); ?>" method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+			<input type="hidden" name="action" value="wlr_delete_return">
+			<input type="hidden" name="return_id" value="<?php echo esc_attr( $return_post->ID ); ?>">
+			<input type="hidden" name="permanent" value="<?php echo $wlr_permanent_delete ? '1' : '0'; ?>">
+			<?php wp_nonce_field( 'wlr_delete_return_' . $return_post->ID ); ?>
+		</form>
+	<?php endforeach; ?>
 
 	<!-- Paginazione -->
 	<?php if ( $total_pages > 1 ) : ?>

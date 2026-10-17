@@ -1,6 +1,6 @@
 # Woo Legal Returns - EU Directive
 
-Versione corrente: **1.5.0**
+Versione corrente: **1.5.1**
 
 Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673)** e al D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).
 
@@ -11,7 +11,7 @@ Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Dir
 | **Modulo di recesso UE** | Dichiarazione standardizzata compilabile dall'area cliente o da una pagina pubblica dedicata |
 | **Doppia conferma digitale** | Validazione iniziale, riepilogo della dichiarazione e invio definitivo solo dopo conferma finale |
 | **Ricevuta probatoria** | Salvataggio di data/ora UTC, IP, user agent, hash SHA-256 e stato invio ricevuta email |
-| **Finestra 14 giorni configurabile** | Termine di calendario; blocco soltanto con decorrenza, informativa e calendario verificati nell'ordine |
+| **Finestra 14 giorni configurabile** | Blocco predefinito oltre la scadenza calcolata, anche per ordini precedenti; ricezione effettiva o decorrenza configurata, tolleranza e calendario |
 | **Stati ordine idonei** | Gli stati WooCommerce ammessi alla richiesta sono configurabili da admin |
 | **Tab "Resi & Recesso"** | Sezione dedicata in "Il mio account" con elenco richieste e form per nuove richieste |
 | **Supporto clienti ospiti** | Link con chiave ordine da thank-you page/email e lookup pubblico tramite numero ordine + email |
@@ -114,8 +114,8 @@ woo-legal/
 | `wlr_withdrawal_page_id` | Pagina pubblica che contiene `[wlr_return_form]` |
 | `wlr_notify_emails` | Destinatari admin delle nuove richieste, separati da virgole |
 | `wlr_eligible_order_statuses` | Stati ordine WooCommerce ammessi alla richiesta |
-| `wlr_deadline_mode` | `advisory` predefinito; `strict` blocca soltanto oltre un termine verificato |
-| `wlr_deadline_basis` | Base della sola stima per i beni: `completed_or_paid` oppure `created` |
+| `wlr_deadline_mode` | Opzione legacy mantenuta a `strict`; il blocco è sempre attivo e non può essere disabilitato |
+| `wlr_deadline_basis` | Decorrenza per i beni senza ricezione registrata: `completed_or_paid` oppure `created`; il blocco si applica anche a questa stima |
 | `wlr_deadline_grace_days` | Giorni di tolleranza aggiunti al termine indicativo |
 | `wlr_digital_consent_text` | Testo consenso contenuti digitali |
 | `wlr_service_consent_text` | Testo consenso servizi |
@@ -138,11 +138,23 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 - **Finestra 14 giorni**: diritto di recesso senza motivazione dalla ricezione dei beni
 - **Rimborso entro 14 giorni**: dalla comunicazione del recesso; per i beni può essere trattenuto fino alla ricezione o alla prova della spedizione, se precedente, salvo ritiro offerto dal venditore.
 
-## Gestione della versione 1.5.0
+## Aggiornamento alla versione 1.5.1
+
+- Il blocco oltre termine è sempre attivo, anche se la vecchia configurazione prevedeva la verifica manuale. Non è più disponibile un'opzione per consentire gli invii dopo la scadenza.
+- Ordini scaduti esclusi dai moduli account/ospiti e rifiutati lato server sia nel riepilogo sia nella conferma finale. L'assenza dei flag di informativa/calendario verificati non permette di superare il blocco. Senza alcuna data disponibile la richiesta richiede assistenza del venditore.
+- Come protezione aggiuntiva, una richiesta comunque registrata oltre termine passa automaticamente da **Richiesto** a **Rifiutato**, con nota nello storico e notifica al cliente. Il controllo avviene alla creazione, prima delle email ordinarie; WP-Cron recupera anche le richieste già presenti, ogni ora in blocchi di 100, con prosecuzioni a un minuto. La disattivazione rimuove questi eventi.
+- Il rifiuto automatico confronta invio UTC e scadenza conservati nella richiesta, senza riscrivere dichiarazione o hash. Non rifiuta le richieste inviate in tempo, quelle già approvate/rimborsate/annullate o quelle prive di date valide da verificare manualmente. WP-Cron richiede traffico sul sito o un cron esterno.
+- Per i beni si privilegia la data effettiva di ricezione; in sua assenza si usa la decorrenza configurata. Questa resta una stima: registrare la ricezione e verificare eventuali termini prolungati per informativa mancante prima di applicare un rifiuto. La data di completamento/pagamento non dimostra la consegna.
+- Il motivo del **recesso** resta facoltativo. Quando assente, dettaglio, elenchi, riepilogo ed email mostrano **Non indicato (facoltativo)**. Le dichiarazioni storiche e i relativi hash non vengono riscritti.
+- Per passare a **Rifiutato** inserire una nota con il motivo del rifiuto: il modulo lo indica e la risposta AJAX distingue nota mancante, ordine/richiesta non validi, operazione occupata e salvataggio non riuscito. Lo stato salvato viene verificato prima di registrare lo storico e inviare la notifica.
+- **Elimina** è disponibile nell'elenco e nel dettaglio: sposta la richiesta nel cestino di **Resi UE**, da cui si può ripristinarla o usare **Elimina definitivamente**. La cancellazione definitiva rimuove anche i metadati della richiesta; l'ordine WooCommerce resta presente. Entrambe le azioni richiedono permessi amministrativi, nonce e conferma, verificano l'esito e annullano i tentativi di invio ricevuta. Se WordPress ha il cestino disattivato viene proposta esplicitamente la cancellazione definitiva.
+- Aggiornare gli eventuali override del tema per visualizzare il motivo facoltativo e l'indicazione della nota obbligatoria.
+
+## Gestione delle richieste
 
 - I resi parziali lasciano disponibili le quantità residue. Richieste aperte/approvate e rimborsi WooCommerce impegnano le quantità; dopo il rimborso effettivo aggiornare il relativo reso a **Rimborsata**.
 - Le nuove righe ordine conservano regola di recesso, tipo di contratto e SKU. Gli ordini precedenti usano il catalogo corrente quando presente: non è possibile ricostruire retroattivamente le regole acquistate. Un prodotto eliminato non impedisce automaticamente il recesso.
-- Nel dettaglio ordine, **Recesso: fatti verificati**, registrare ricezione effettiva, informativa completa fornita prima del contratto, festività applicabili e verifica del calendario. Senza questi elementi il termine rimane indicativo anche in modalità strict. Sabati, domeniche e festività indicate rinviano la scadenza al successivo giorno lavorativo, fino alle 23:59:59 nel fuso del sito.
+- Nel dettaglio ordine, **Recesso: fatti verificati**, registrare ricezione effettiva, informativa completa fornita prima del contratto, festività applicabili e verifica del calendario. Questi elementi distinguono una scadenza verificata da una stima; in modalità strict entrambe vengono applicate. Sabati, domeniche e festività indicate rinviano la scadenza al successivo giorno lavorativo, fino alle 23:59:59 nel fuso del sito.
 - Per escludere il digitale occorrono consenso, esecuzione iniziata e conferma fornita su supporto durevole. Per i servizi occorrono consenso con riconoscimento della perdita del diritto e piena esecuzione; per sigilli/beni mescolati occorre il fatto verificato. I soli flag virtuale/scaricabile non sono esclusioni.
 - La dichiarazione confermata conserva nome, email, ordine, articoli, motivo facoltativo, note, destinatario e timestamp UTC. La ricevuta usa questo snapshot. SHA-256 rileva una modifica del contenuto se confrontato con il valore originale; non impedisce a un amministratore di modificare il database.
 - Le ricevute fallite conservano un diagnostico, hanno fino a tre tentativi automatici tramite WP-Cron e possono essere reinviate dal dettaglio richiesta. Un invio accettato dal servizio email non prova la consegna alla casella.
@@ -154,12 +166,10 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 
 ```text
 php tests/regression.php
-node tests/ajax-regression.js
-composer phpcs
 node --check assets/js/wlr-frontend.js
 node --check assets/js/wlr-admin.js
 ```
 
-Per Node, impostare WLR_TEST_PHP se PHP non è nel PATH. Le prove locali usano dipendenze simulate e metodi reali del plugin. Per la matrice dei test WordPress, browser, HPOS, SMTP, cache e concorrenza su database vedere INTERVENTI-1.5.0.md.
+Le prove locali usano dipendenze simulate e metodi reali del plugin, compreso l'endpoint AJAX di aggiornamento stato in processi separati. Non sostituiscono le verifiche WordPress/WooCommerce, browser, HPOS, invio email e concorrenza su un database reale.
 
 Il plugin supporta la gestione tecnica del recesso. La conformità del negozio dipende anche dai fatti, dai testi e dai processi del venditore. Riferimenti: [Direttiva 2011/83/UE](https://eur-lex.europa.eu/legal-content/IT/ALL/?uri=celex%3A32011L0083), [termini di calendario, Regolamento 1182/71](https://eur-lex.europa.eu/legal-content/IT/TXT/PDF/?uri=CELEX%3A31971R1182), [Additional Checkout Fields WooCommerce](https://developer.woocommerce.com/docs/block-development/extensible-blocks/cart-and-checkout-blocks/additional-checkout-fields/).

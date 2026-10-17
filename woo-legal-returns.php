@@ -3,7 +3,7 @@
  * Plugin Name:       Woo Legal Returns – EU Directive
  * Plugin URI:        https://github.com/marrisonlab/woo-legal
  * Description:       Adegua WooCommerce alla Direttiva UE sui Diritti dei Consumatori: modulo di recesso standardizzato, gestione richieste di reso nell'area cliente, notifiche email e dashboard admin.
- * Version:           1.5.0
+ * Version:           1.5.1
  * Author:            Marrisonlab
  * Author URI:        https://marrisonlab.com
  * Text Domain:       woo-legal-returns
@@ -19,7 +19,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WLR_VERSION', '1.5.0' );
+define( 'WLR_VERSION', '1.5.1' );
 define( 'WLR_PLUGIN_FILE', __FILE__ );
 define( 'WLR_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 define( 'WLR_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -104,6 +104,7 @@ register_activation_hook( __FILE__, 'wlr_activate' );
  * Disattivazione.
  */
 function wlr_deactivate(): void {
+	wp_unschedule_hook( 'wlr_reject_late_returns' );
 	flush_rewrite_rules();
 }
 register_deactivation_hook( __FILE__, 'wlr_deactivate' );

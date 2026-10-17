@@ -14,6 +14,11 @@
 .wlr-admin-wrap .form-table textarea.large-text {
 	max-width: 760px;
 }
+.wlr-admin-wrap .wlr-row-actions .button {
+	max-width: 100%;
+	margin-bottom: 4px;
+	white-space: normal;
+}
 
 /* Badge (riutilizzati in admin) */
 .wlr-badge {
