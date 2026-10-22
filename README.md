@@ -1,6 +1,6 @@
 # Woo Legal Returns - EU Directive
 
-Versione corrente: **1.5.1**
+Versione corrente: **1.5.3**
 
 Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673)** e al D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).
 
@@ -25,7 +25,7 @@ Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Dir
 | **Export CSV** | Esportazione richieste filtrata per stato/date con dati tecnici opzionali |
 | **Colonna ordini WooCommerce** | Stato recesso visibile nella lista ordini classica e HPOS |
 | **Privacy WordPress** | Export/eraser delle richieste, incluse quelle nel cestino; consensi integrati negli strumenti privacy WooCommerce |
-| **Setup wizard** | Configurazione pagina informativa, dati venditore, menu e avviso checkout |
+| **Setup wizard** | Scelta tra pagina informativa generata e shortcode per pagine proprie, dati venditore, menu e avviso checkout |
 | **Aggiornamenti GitHub** | Updater integrato basato sulle release GitHub del repository |
 | **HPOS compatibile** | Dichiarazione compatibilita WooCommerce High-Performance Order Storage |
 
@@ -89,11 +89,16 @@ woo-legal/
 
 | Shortcode | Uso |
 |---|---|
+| `[wlr_precontractual_policy]` | Informativa completa sul diritto di recesso con dati venditore aggiornati, link alla procedura e modulo tipo, senza titoli H1–H6 |
 | `[wlr_return_form]` | Mostra il form pubblico di recesso, con supporto ospiti tramite numero ordine + email |
 | `[wlr_withdrawal_link]` | Mostra la procedura account per utenti registrati e la pagina pubblica per gli ospiti |
 | `[wlr_checkout_notice]` | Mostra l'avviso checkout configurato nel wizard/impostazioni |
 | `[wlr_withdrawal_notice id="123"]` | Mostra l'avviso di non recedibilita o consenso per un prodotto specifico |
 | `[wlr_model_withdrawal_form]` | Modulo tipo stampabile con dati del venditore; nessuna rimozione automatica dei contenuti esistenti |
+
+Nel primo passaggio del wizard puoi creare una nuova pagina oppure scegliere **Genera lo shortcode per una mia pagina**. Copia `[wlr_precontractual_policy]` nel blocco Shortcode di WordPress o nel widget Shortcode di Elementor: il testo riprende i dati venditore salvati nel wizard, senza creare o sovrascrivere pagine. Puoi associare una pagina pubblicata subito o tornare dopo averla realizzata; la pagina associata viene proposta per i menu e usata per i link dell'informativa. Se modifichi l'associazione, verifica anche il link nel testo personalizzato dell'avviso checkout.
+
+La pagina generata e lo shortcode condividono il testo, con paragrafi, grassetto, elenchi e corsivo. Anche il modulo tipo usa il grassetto al posto degli heading. Le pagine generate nelle versioni precedenti conservano il contenuto salvato: per applicare il nuovo formato, selezionale nel wizard e richiedi esplicitamente l'aggiornamento del contenuto, oppure inserisci lo shortcode nella tua pagina.
 
 ## Hook disponibili
 
@@ -138,6 +143,18 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 - **Finestra 14 giorni**: diritto di recesso senza motivazione dalla ricezione dei beni
 - **Rimborso entro 14 giorni**: dalla comunicazione del recesso; per i beni può essere trattenuto fino alla ricezione o alla prova della spedizione, se precedente, salvo ritiro offerto dal venditore.
 
+## Aggiornamento alla versione 1.5.3
+
+- Modulo tipo separato dal resto dell'informativa tramite un box, con istruzioni che lo identificano come alternativa alla procedura online: non occorre inviarlo se la richiesta è già stata presentata dall'area Resi e Recesso.
+- Email e telefoni cliccabili nell'informativa e nel modulo tipo. I numeri conservano spazi e prefisso nel testo, con destinazione `tel:` normalizzata.
+- Gli shortcode mostrano subito il nuovo formato dopo l'aggiornamento del plugin; per i recapiti nel testo di una pagina generata in precedenza occorre rigenerarne esplicitamente il contenuto dal wizard.
+
+## Aggiornamento alla versione 1.5.2
+
+- Scelta nel wizard tra creazione della pagina e shortcode `[wlr_precontractual_policy]`, con associazione facoltativa alla pagina creata dall'utente.
+- Informativa e modulo tipo senza heading H1–H6; dati venditore aggiornati a ogni visualizzazione dello shortcode.
+- Pagine e layout esistenti conservati; aggiornamento dei testi statici solo su richiesta esplicita nel wizard.
+
 ## Aggiornamento alla versione 1.5.1
 
 - Il blocco oltre termine è sempre attivo, anche se la vecchia configurazione prevedeva la verifica manuale. Non è più disponibile un'opzione per consentire gli invii dopo la scadenza.
@@ -166,6 +183,7 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 
 ```text
 php tests/regression.php
+php tests/precontractual.php
 node --check assets/js/wlr-frontend.js
 node --check assets/js/wlr-admin.js
 ```

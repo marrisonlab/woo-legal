@@ -34,9 +34,16 @@ class WLR_Setup_Wizard {
 	}
 
 	private function hooks(): void {
-		add_action( 'admin_menu', array( $this, 'register_page' ) );
-		add_action( 'admin_init', array( $this, 'handle_post' ) );
-		add_action( 'admin_notices', array( $this, 'show_setup_notice' ) );
+		add_shortcode( 'wlr_precontractual_policy', array( $this, 'render_policy_shortcode' ) );
+		if ( is_admin() ) {
+			add_action( 'admin_menu', array( $this, 'register_page' ) );
+			add_action( 'admin_init', array( $this, 'handle_post' ) );
+			add_action( 'admin_notices', array( $this, 'show_setup_notice' ) );
+		}
+	}
+
+	public function render_policy_shortcode(): string {
+		return do_shortcode( do_blocks( $this->get_default_page_content() ) );
 	}
 
 	// -------------------------------------------------------------------------
@@ -92,7 +99,23 @@ class WLR_Setup_Wizard {
 		$trader_data = $this->sanitize_trader_data_from_post();
 		// phpcs:enable WordPress.Security.NonceVerification.Missing
 
-		$this->save_trader_data( $trader_data );
+		if ( ! in_array( $mode, array( 'new', 'existing', 'shortcode' ), true ) ) {
+			wp_die( esc_html__( 'Seleziona una modalità valida per l’informativa.', 'woo-legal-returns' ) );
+		}
+
+		if ( 'shortcode' === $mode ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
+			$page_id = absint( wp_unslash( $_POST['shortcode_page_id'] ?? 0 ) );
+			$page    = $page_id ? get_post( $page_id ) : null;
+			if ( $page_id && ( ! $page || 'page' !== $page->post_type || 'publish' !== $page->post_status || ! current_user_can( 'edit_post', $page_id ) ) ) {
+				wp_die( esc_html__( 'Seleziona una pagina pubblicata e modificabile per lo shortcode.', 'woo-legal-returns' ) );
+			}
+			$this->save_trader_data( $trader_data );
+			$this->save_option( 'precontractual_mode', 'shortcode' );
+			$this->save_option( 'precontractual_page_id', $page_id );
+			wp_safe_redirect( $this->wizard_url( 'menu' ) );
+			exit;
+		}
 
 		if ( 'existing' === $mode ) {
 			// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
@@ -134,6 +157,8 @@ class WLR_Setup_Wizard {
 		}
 
 		if ( $page_id && ! is_wp_error( $page_id ) ) {
+			$this->save_trader_data( $trader_data );
+			$this->save_option( 'precontractual_mode', $mode );
 			$this->save_option( 'precontractual_page_id', (int) $page_id );
 		} else {
 			wp_die( esc_html__( 'Creazione della pagina fallita.', 'woo-legal-returns' ) );
@@ -145,6 +170,10 @@ class WLR_Setup_Wizard {
 
 	private function save_menu(): void {
 		$page_id = (int) $this->get_option( 'precontractual_page_id' );
+		if ( ! $page_id ) {
+			wp_safe_redirect( $this->wizard_url( 'checkout_notice' ) );
+			exit;
+		}
 		// phpcs:ignore WordPress.Security.NonceVerification.Missing -- Verified in handle_post before dispatch.
 		$menu_ids = array_map( 'absint', (array) wp_unslash( $_POST['menus'] ?? array() ) );
 		$added    = array();
@@ -249,7 +278,7 @@ class WLR_Setup_Wizard {
 
 	private function render_step_precontractual(): void {
 		$saved_id          = (int) $this->get_option( 'precontractual_page_id' );
-		$mode              = $saved_id ? 'existing' : 'new';
+		$mode              = 'shortcode' === $this->get_option( 'precontractual_mode' ) ? 'shortcode' : ( $saved_id ? 'existing' : 'new' );
 		$is_generated_page = $saved_id && '1' === get_post_meta( $saved_id, '_wlr_generated_precontractual_page', true );
 		$trader_data       = $this->get_trader_data();
 		$pages             = get_pages(
@@ -261,7 +290,7 @@ class WLR_Setup_Wizard {
 		?>
 		<h2><?php esc_html_e( 'Pagina Informativa Precontrattuale', 'woo-legal-returns' ); ?></h2>
 		<p class="wlr-step-desc">
-			<?php esc_html_e( 'Crea o associa una pagina del sito contenente le informazioni obbligatorie sul diritto di recesso (artt. 49–51 D.Lgs. 206/2005, Direttiva 2023/2673). Il contenuto della nuova pagina sarà precompilato con il testo standard aggiornato.', 'woo-legal-returns' ); ?>
+			<?php esc_html_e( 'Scegli se creare la pagina dell’informativa sul diritto di recesso oppure inserire lo shortcode in una pagina realizzata da te, anche con Elementor. Il testo usa paragrafi, grassetto, elenchi e corsivo, senza titoli H1–H6.', 'woo-legal-returns' ); ?>
 		</p>
 
 		<form method="post">
@@ -283,6 +312,25 @@ class WLR_Setup_Wizard {
 				</div>
 
 				<label class="wlr-radio-label">
+					<input type="radio" name="page_mode" value="shortcode" <?php checked( $mode, 'shortcode' ); ?>>
+					<span>
+						<strong><?php esc_html_e( 'Genera lo shortcode per una mia pagina', 'woo-legal-returns' ); ?></strong><br>
+						<small><?php esc_html_e( 'Il testo si aggiorna dai dati venditore salvati, senza creare o modificare pagine.', 'woo-legal-returns' ); ?></small>
+					</span>
+				</label>
+				<div class="wlr-sub-fields" id="wlr-shortcode-fields">
+					<?php $this->render_policy_shortcode_instructions(); ?>
+					<label for="wlr_shortcode_page_id"><?php esc_html_e( 'Pagina che conterrà lo shortcode (facoltativa)', 'woo-legal-returns' ); ?></label>
+					<select id="wlr_shortcode_page_id" name="shortcode_page_id">
+						<option value="0"><?php esc_html_e( '— La assocerò in seguito —', 'woo-legal-returns' ); ?></option>
+						<?php foreach ( $pages as $p ) : ?>
+						<option value="<?php echo esc_attr( $p->ID ); ?>" <?php selected( $saved_id, $p->ID ); ?>><?php echo esc_html( $p->post_title ); ?></option>
+						<?php endforeach; ?>
+					</select>
+					<p class="description"><?php esc_html_e( 'La pagina associata viene usata per i link dell’informativa e per i menu. Inserisci tu lo shortcode nel punto desiderato, poi pubblica la pagina e associala qui.', 'woo-legal-returns' ); ?></p>
+				</div>
+
+				<label class="wlr-radio-label">
 					<input type="radio" name="page_mode" value="existing" <?php checked( $mode, 'existing' ); ?>>
 					<span>
 						<strong><?php esc_html_e( 'Usa una pagina già esistente', 'woo-legal-returns' ); ?></strong><br>
@@ -300,7 +348,7 @@ class WLR_Setup_Wizard {
 					</select>
 					<p>
 						<label>
-							<input type="checkbox" name="refresh_existing_page" value="1" <?php checked( $is_generated_page ); ?>>
+							<input type="checkbox" name="refresh_existing_page" value="1" <?php checked( $is_generated_page && 'shortcode' !== $mode ); ?>>
 							<?php esc_html_e( 'Aggiorna il contenuto della pagina selezionata con i dati venditore inseriti qui sotto', 'woo-legal-returns' ); ?>
 						</label>
 					</p>
@@ -309,7 +357,7 @@ class WLR_Setup_Wizard {
 
 			<h3><?php esc_html_e( 'Dati venditore da inserire nell\'informativa', 'woo-legal-returns' ); ?></h3>
 			<p class="description">
-				<?php esc_html_e( 'Questi campi vengono precompilati dai dati WooCommerce quando disponibili. Puoi correggerli prima di generare la pagina.', 'woo-legal-returns' ); ?>
+				<?php esc_html_e( 'Questi campi vengono precompilati dai dati WooCommerce quando disponibili. Sono usati sia per la pagina generata sia per lo shortcode.', 'woo-legal-returns' ); ?>
 			</p>
 
 			<table class="form-table wlr-trader-fields" role="presentation">
@@ -361,10 +409,12 @@ class WLR_Setup_Wizard {
 			var radios   = document.querySelectorAll('[name="page_mode"]');
 			var newDiv   = document.getElementById('wlr-new-fields');
 			var existDiv = document.getElementById('wlr-existing-fields');
+			var shortcodeDiv = document.getElementById('wlr-shortcode-fields');
 			function sync() {
 				var v = document.querySelector('[name="page_mode"]:checked').value;
 				newDiv.style.display   = ( v === 'new' )      ? '' : 'none';
 				existDiv.style.display = ( v === 'existing' ) ? '' : 'none';
+				shortcodeDiv.style.display = ( v === 'shortcode' ) ? '' : 'none';
 			}
 			radios.forEach( function (r) { r.addEventListener( 'change', sync ); } );
 			sync();
@@ -379,6 +429,9 @@ class WLR_Setup_Wizard {
 		$page_id   = (int) $this->get_option( 'precontractual_page_id' );
 		?>
 		<h2><?php esc_html_e( 'Menu di Navigazione', 'woo-legal-returns' ); ?></h2>
+		<?php if ( 'shortcode' === $this->get_option( 'precontractual_mode' ) ) : ?>
+			<?php $this->render_policy_shortcode_instructions(); ?>
+		<?php endif; ?>
 		<p class="wlr-step-desc">
 			<?php esc_html_e( 'Seleziona i menu in cui aggiungere il link alla pagina dell\'informativa. Puoi saltare e farlo manualmente da Aspetto → Menu.', 'woo-legal-returns' ); ?>
 		</p>
@@ -394,13 +447,15 @@ class WLR_Setup_Wizard {
 			);
 			?>
 		</div>
+		<?php else : ?>
+		<p class="description"><?php esc_html_e( 'Nessuna pagina informativa associata. Puoi proseguire e tornare al primo passaggio dopo aver pubblicato la tua pagina con lo shortcode.', 'woo-legal-returns' ); ?></p>
 		<?php endif; ?>
 
 		<form method="post">
 			<?php wp_nonce_field( 'wlr_wizard_menu' ); ?>
 			<input type="hidden" name="wlr_wizard_step" value="menu">
 
-			<?php if ( $nav_menus ) : ?>
+			<?php if ( $page_id && $nav_menus ) : ?>
 				<div class="wlr-checkbox-group">
 				<?php foreach ( $nav_menus as $menu ) : ?>
 					<label class="wlr-checkbox-label">
@@ -424,7 +479,7 @@ class WLR_Setup_Wizard {
 					</label>
 				<?php endforeach; ?>
 				</div>
-			<?php else : ?>
+			<?php elseif ( $page_id ) : ?>
 				<p class="description">
 					<?php esc_html_e( 'Nessun menu trovato. Crea prima un menu da Aspetto → Menu, poi riesegui la configurazione.', 'woo-legal-returns' ); ?>
 				</p>
@@ -470,6 +525,13 @@ class WLR_Setup_Wizard {
 			WLR_RETURN_DAYS,
 			esc_url( $page_url )
 		);
+		if ( ! $page_id ) {
+			$default = sprintf(
+				/* translators: %d: giorni */
+				__( 'Hai diritto di recedere dal contratto entro %d giorni senza fornire alcuna motivazione (art. 52 Cod. Consumo).', 'woo-legal-returns' ),
+				WLR_RETURN_DAYS
+			);
+		}
 		$text = (string) $this->get_option( 'checkout_notice_text', $default );
 		?>
 		<h2><?php esc_html_e( 'Avviso al Checkout', 'woo-legal-returns' ); ?></h2>
@@ -497,7 +559,7 @@ class WLR_Setup_Wizard {
 						<th style="width:140px;"><?php esc_html_e( 'Testo avviso', 'woo-legal-returns' ); ?></th>
 						<td>
 							<textarea name="checkout_notice_text" rows="3" style="width:100%;max-width:500px;"><?php echo esc_textarea( $text ); ?></textarea>
-							<p class="description"><?php esc_html_e( 'Puoi usare tag HTML di base (a, strong, em). Il link viene aggiornato automaticamente se cambi la pagina informativa.', 'woo-legal-returns' ); ?></p>
+							<p class="description"><?php esc_html_e( 'Puoi usare tag HTML di base (a, strong, em). Dopo aver associato la pagina informativa, verifica il link nel testo e salva l’avviso.', 'woo-legal-returns' ); ?></p>
 						</td>
 					</tr>
 				</table>
@@ -542,6 +604,9 @@ class WLR_Setup_Wizard {
 			<p class="wlr-step-desc">
 				<?php esc_html_e( 'Il plugin è operativo. Puoi rieseguire questa configurazione in qualsiasi momento dalla dashboard Resi UE.', 'woo-legal-returns' ); ?>
 			</p>
+			<?php if ( 'shortcode' === $this->get_option( 'precontractual_mode' ) ) : ?>
+				<?php $this->render_policy_shortcode_instructions(); ?>
+			<?php endif; ?>
 			<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px;">
 				<a href="<?php echo esc_url( admin_url( 'admin.php?page=wlr-returns' ) ); ?>"
 					class="button button-primary button-large">
@@ -626,6 +691,13 @@ class WLR_Setup_Wizard {
 
 	public function wizard_url( string $step ): string {
 		return admin_url( 'admin.php?page=' . self::WIZARD_SLUG . '&step=' . rawurlencode( $step ) );
+	}
+
+	private function render_policy_shortcode_instructions(): void {
+		?>
+		<p><code>[wlr_precontractual_policy]</code></p>
+		<p><?php esc_html_e( 'Copia lo shortcode nel blocco Shortcode di WordPress o nel widget Shortcode di Elementor. Salva i dati venditore nel primo passaggio del wizard per aggiornare il testo dell’informativa.', 'woo-legal-returns' ); ?></p>
+		<?php
 	}
 
 	public static function get_options(): array {
@@ -724,7 +796,7 @@ class WLR_Setup_Wizard {
 		if ( null === $trader_data ) {
 			$trader_data = $this->get_trader_data();
 		}
-		$date    = date_i18n( get_option( 'date_format' ) );
+		$date    = esc_html( date_i18n( get_option( 'date_format' ) ) );
 		$site    = esc_html( (string) ( $trader_data['name'] ?? get_bloginfo( 'name' ) ) );
 		$address = (string) ( $trader_data['address'] ?? '' );
 		$email   = sanitize_email( (string) ( $trader_data['email'] ?? '' ) );
@@ -735,15 +807,15 @@ class WLR_Setup_Wizard {
 			$vendor_lines[] = 'Sede legale: ' . nl2br( esc_html( $address ) );
 		}
 		if ( '' !== $email ) {
-			$vendor_lines[] = 'Email: ' . esc_html( $email );
+			$vendor_lines[] = 'Email: ' . WLR_Annex_Form::email_link( $email );
 		}
 		if ( '' !== $phone ) {
-			$vendor_lines[] = 'Telefono: ' . esc_html( $phone );
+			$vendor_lines[] = 'Telefono: ' . WLR_Annex_Form::phone_link( $phone );
 		}
 
 		$vendor_block   = implode( "<br>\n", $vendor_lines );
 		$address_inline = trim( preg_replace( '/\s+/', ' ', str_replace( array( "\r", "\n" ), ', ', $address ) ) );
-		$email_item     = '' !== $email ? '<li>Inviando una dichiarazione scritta a: <strong>' . esc_html( $email ) . '</strong>;</li>' : '';
+		$email_item     = '' !== $email ? '<li>Inviando una dichiarazione scritta a: <strong>' . WLR_Annex_Form::email_link( $email ) . '</strong>;</li>' : '';
 		$mail_item      = '' !== $address_inline ? '<li>Tramite raccomandata A/R a: <strong>' . esc_html( $address_inline ) . '</strong>.</li>' : '';
 
 		return "<!-- wp:paragraph -->
@@ -751,17 +823,17 @@ class WLR_Setup_Wizard {
 Ai sensi degli artt. 49&#x2013;59 del D.Lgs. 206/2005 (Codice del Consumo), come modificato dal D.Lgs. 209/2025 (recepimento Direttiva UE 2023/2673)</p>
 <!-- /wp:paragraph -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Venditore</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Venditore</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
 <p>{$vendor_block}</p>
 <!-- /wp:paragraph -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Diritto di recesso</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Diritto di recesso</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
 <p>Hai il diritto di recedere dal presente contratto entro <strong>14 giorni</strong> senza dover fornire alcuna motivazione.</p>
@@ -771,45 +843,45 @@ Ai sensi degli artt. 49&#x2013;59 del D.Lgs. 206/2005 (Codice del Consumo), come
 <p>Il periodo di recesso scade dopo 14 giorni dalla data in cui tu, o un terzo da te designato diverso dal vettore, entri in possesso fisico dei beni.</p>
 <!-- /wp:paragraph -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Come esercitare il diritto di recesso</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Come esercitare il diritto di recesso</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
 <p>Puoi inviare la richiesta direttamente dall'area cliente del sito. La procedura digitale registra la richiesta e invia una ricevuta via email.</p>
 <!-- /wp:paragraph -->
 
 <!-- wp:shortcode -->
-[wlr_withdrawal_link label=\"Vai all'area Resi e Recesso\"]
+[wlr_withdrawal_link label=\"Vai all'area Resi e Recesso\" class=\"\"]
 <!-- /wp:shortcode -->
 
 <!-- wp:list -->
 <ul>
-<li>Tramite la <strong>funzione digitale di recesso</strong> disponibile dal pulsante sopra o dalla sezione Resi &amp; Recesso del tuo account;</li>
+<li>Tramite la <strong>funzione digitale di recesso</strong> disponibile dal link sopra o dalla sezione Resi &amp; Recesso del tuo account;</li>
 {$email_item}
 {$mail_item}
 </ul>
 <!-- /wp:list -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Effetti del recesso</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Effetti del recesso</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
 <p>Rimborseremo tutti i pagamenti ricevuti, compresi i costi di consegna standard, entro <strong>14 giorni</strong> dalla comunicazione di recesso, utilizzando lo stesso mezzo di pagamento usato per la transazione iniziale, salvo accordo diverso. Per i beni, salvo ritiro offerto dal venditore, possiamo trattenere il rimborso fino alla ricezione dei beni o della prova di spedizione, se precedente.</p>
 <!-- /wp:paragraph -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Restituzione dei beni</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Restituzione dei beni</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:paragraph -->
 <p>Dovrai restituire i beni all'indirizzo indicato dal venditore entro 14 giorni dalla comunicazione di recesso. I costi diretti di restituzione sono a tuo carico, salvo diversa indicazione.</p>
 <!-- /wp:paragraph -->
 
-<!-- wp:heading {\"level\":3} -->
-<h3>Eccezioni al diritto di recesso (art. 59 D.Lgs. 206/2005)</h3>
-<!-- /wp:heading -->
+<!-- wp:paragraph -->
+<p><strong>Eccezioni al diritto di recesso (art. 59 D.Lgs. 206/2005)</strong></p>
+<!-- /wp:paragraph -->
 
 <!-- wp:list -->
 <ul>

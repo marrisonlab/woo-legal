@@ -38,8 +38,10 @@ defined( 'ABSPATH' ) || exit;
 			<p><?php esc_html_e( 'Crea o associa una pagina del sito contenente le informazioni obbligatorie sul diritto di recesso (artt. 49–51 D.Lgs. 206/2005, Direttiva 2023/2673).', 'woo-legal-returns' ); ?></p>
 			<ul style="line-height: 1.6;">
 				<li><?php esc_html_e( 'Crea una nuova pagina', 'woo-legal-returns' ); ?> – <?php esc_html_e( 'Il contenuto viene precompilato automaticamente con il testo standard aggiornato secondo il D.Lgs. 209/2025.', 'woo-legal-returns' ); ?></li>
+				<li><?php esc_html_e( 'Genera lo shortcode per una mia pagina', 'woo-legal-returns' ); ?> – <code>[wlr_precontractual_policy]</code>. <?php esc_html_e( 'Inseriscilo nel blocco Shortcode di WordPress o nel widget Shortcode di Elementor. Il testo usa i dati venditore salvati nel wizard, senza creare o sovrascrivere pagine. Puoi associare la tua pagina pubblicata per i menu e i link dell’informativa, anche in seguito.', 'woo-legal-returns' ); ?></li>
 				<li><?php esc_html_e( 'Usa una pagina esistente', 'woo-legal-returns' ); ?> – <?php esc_html_e( 'Seleziona una pagina già presente nel sito (utile se hai già una pagina informativa).', 'woo-legal-returns' ); ?></li>
 			</ul>
+			<p><?php esc_html_e( 'L’informativa generata e il modulo tipo usano paragrafi, grassetto, elenchi e corsivo, senza heading H1–H6. Le pagine già create conservano il testo salvato: puoi aggiornarlo selezionando l’apposita casella nel wizard.', 'woo-legal-returns' ); ?></p>
 
 			<h4><?php esc_html_e( '2. Menu di Navigazione', 'woo-legal-returns' ); ?></h4>
 			<p><?php esc_html_e( 'Aggiunge automaticamente il link alla pagina informativa nei menu selezionati. Puoi saltare questo passaggio e aggiungere il link manualmente da Aspetto → Menu.', 'woo-legal-returns' ); ?></p>
@@ -48,7 +50,7 @@ defined( 'ABSPATH' ) || exit;
 			<p><?php esc_html_e( 'Configura un avviso informativo che appare nella pagina di checkout, appena sopra il tasto "Conferma ordine". Raccomandato per la conformità all\'art. 49 D.Lgs. 206/2005.', 'woo-legal-returns' ); ?></p>
 			<ul style="line-height: 1.6;">
 				<li><?php esc_html_e( 'Mostra avviso', 'woo-legal-returns' ); ?> – <?php esc_html_e( 'Attiva o disattiva la visualizzazione dell\'avviso.', 'woo-legal-returns' ); ?></li>
-				<li><?php esc_html_e( 'Testo avviso', 'woo-legal-returns' ); ?> – <?php esc_html_e( 'Personalizza il testo (supporta HTML di base). Il link "Maggiori informazioni" viene aggiornato automaticamente se cambi la pagina informativa nel wizard.', 'woo-legal-returns' ); ?></li>
+				<li><?php esc_html_e( 'Testo avviso', 'woo-legal-returns' ); ?> – <?php esc_html_e( 'Personalizza il testo (supporta HTML di base). Dopo aver cambiato la pagina informativa nel wizard, verifica il link "Maggiori informazioni" nel testo e salva l’avviso.', 'woo-legal-returns' ); ?></li>
 			</ul>
 
 			<p style="background: #fff3cd; padding: 12px; border-left: 4px solid #ffc107; border-radius: 3px;">
