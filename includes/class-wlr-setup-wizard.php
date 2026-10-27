@@ -43,7 +43,9 @@ class WLR_Setup_Wizard {
 	}
 
 	public function render_policy_shortcode(): string {
-		return do_shortcode( do_blocks( $this->get_default_page_content() ) );
+		// The shared page template contains editor markers, not presentation for the shortcode.
+		$content = preg_replace( '/<!-- \/?wp:[^>]*-->\s*/', '', $this->get_default_page_content() );
+		return do_shortcode( $content );
 	}
 
 	// -------------------------------------------------------------------------

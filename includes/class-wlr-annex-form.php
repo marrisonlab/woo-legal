@@ -56,7 +56,7 @@ class WLR_Annex_Form {
 				)
 			)
 		);
-		return '<div class="wlr-model-withdrawal-form" style="margin:1.5em 0;padding:clamp(1rem,3vw,1.5rem);border:1px solid #cbd5e1;border-radius:6px;background:#f8fafc;color:#1f2937;overflow-wrap:anywhere;"><p style="margin-top:0;"><strong>' . esc_html__( 'Modulo tipo di recesso — alternativa alla procedura online', 'woo-legal-returns' ) . '</strong></p><p>' .
+		return '<div class="wlr-model-withdrawal-form" style="border:1px solid #cbd5e1;background:#f8fafc;padding:1em;"><p><strong>' . esc_html__( 'Modulo tipo di recesso — alternativa alla procedura online', 'woo-legal-returns' ) . '</strong></p><p>' .
 			esc_html__( 'In alternativa alla procedura online, puoi compilare questo modulo e inviarlo ai recapiti del venditore. Se hai già inviato la richiesta dall’area Resi e Recesso, non è necessario compilare anche questo modulo.', 'woo-legal-returns' ) . '</p><p>' .
 			esc_html__( 'Compilare e restituire questo modulo solo se si desidera recedere dal contratto.', 'woo-legal-returns' ) . '</p><p>' .
 			esc_html__( 'Destinatario:', 'woo-legal-returns' ) . ' ' . $trader . '</p><p>' .
@@ -65,7 +65,7 @@ class WLR_Annex_Form {
 			esc_html__( 'Nome del/dei consumatore/i:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
 			esc_html__( 'Indirizzo del/dei consumatore/i:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
 			esc_html__( 'Firma del/dei consumatore/i (solo per modulo cartaceo):', 'woo-legal-returns' ) . ' ____________________</p><p>' .
-			esc_html__( 'Data:', 'woo-legal-returns' ) . ' ____________________</p><p style="margin-bottom:0;">' .
+			esc_html__( 'Data:', 'woo-legal-returns' ) . ' ____________________</p><p>' .
 			esc_html__( '(*) Cancellare la dicitura inutile.', 'woo-legal-returns' ) . '</p></div>';
 	}
 

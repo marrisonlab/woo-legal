@@ -1,6 +1,6 @@
 # Woo Legal Returns - EU Directive
 
-Versione corrente: **1.5.3**
+Versione corrente: **1.5.4**
 
 Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673)** e al D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).
 
@@ -142,6 +142,11 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 - **D.Lgs. 209/2025 (art. 54-bis Codice del Consumo)**: conferma immediata, doppia conferma e testo completo dichiarazione
 - **Finestra 14 giorni**: diritto di recesso senza motivazione dalla ricezione dei beni
 - **Rimborso entro 14 giorni**: dalla comunicazione del recesso; per i beni può essere trattenuto fino alla ricezione o alla prova della spedizione, se precedente, salvo ritiro offerto dal venditore.
+
+## Aggiornamento alla versione 1.5.4
+
+- Lo shortcode dell'informativa restituisce solo un frammento HTML con paragrafi, elenchi, grassetto, corsivo e link. Non esegue il rendering dei blocchi WordPress e non aggiunge i loro marcatori, classi o stili.
+- Il solo contenitore aggiuntivo è il box del modulo tipo, con bordo, fondo e spaziatura interna. Font, dimensioni del testo, margini e impaginazione restano gestiti dal tema o dal widget della pagina.
 
 ## Aggiornamento alla versione 1.5.3
 

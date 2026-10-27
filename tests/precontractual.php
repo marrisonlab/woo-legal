@@ -70,7 +70,7 @@ function is_user_logged_in() { return false; }
 function wc_get_account_endpoint_url( $endpoint ) { return 'https://example.test/account/' . $endpoint; }
 function shortcode_atts( $defaults, $atts, ...$args ) { return array_merge( $defaults, array_intersect_key( $atts, $defaults ) ); }
 // Minimal doubles for block/shortcode expansion; actual WordPress parsing is a staging check.
-function do_blocks( $content ) { return preg_replace( '/<!--.*?-->/s', '', $content ); }
+function do_blocks( $content ) { ++$GLOBALS['block_renders']; return preg_replace( '/<!--.*?-->/s', '', $content ); }
 function do_shortcode( $content ) {
 	return preg_replace_callback( '/\[(wlr_\w+)([^\]]*)\]/', function ( $match ) {
 		if ( ! isset( $GLOBALS['shortcodes'][ $match[1] ] ) ) { return $match[0]; }
@@ -124,7 +124,15 @@ $_POST['refresh_existing_page'] = 1;
 save_step( 'save_precontractual' );
 check( $wizard->get_option( 'precontractual_page_id' ) === 10, 'Custom page must be associated for links' );
 check( empty( $writes ) && $posts[10]->post_content === 'Layout Elementor originale', 'Even a stale refresh checkbox must not overwrite shortcode page' );
+$block_renders = 0;
 $html = do_shortcode( '[wlr_precontractual_policy]' );
+check( $block_renders === 0, 'Policy shortcode must not invoke the block renderer or its presentation filters' );
+check( ! str_contains( $html, '<!--' ) && ! str_contains( $html, 'wp-block-' ), 'Policy shortcode must not include editor markers or block presentation classes' );
+preg_match_all( '/<\/?([a-z][a-z0-9]*)\b/i', $html, $policy_tags );
+check( ! array_diff( array_unique( $policy_tags[1] ), array( 'p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'a', 'div' ) ), 'Policy markup must be limited to basic formatting and the model box' );
+check( substr_count( $html, '<div' ) === 1, 'The model box must be the only additional container' );
+preg_match_all( '/style="([^"]*)"/', $html, $policy_styles );
+check( $policy_styles[1] === array( 'border:1px solid #cbd5e1;background:#f8fafc;padding:1em;' ), 'Only the model box may set border, background and internal spacing; typography and layout remain inherited' );
 check( str_contains( $html, 'Venditore &amp; soci' ) && str_contains( $html, 'Via Roma 1' ) && str_contains( $html, 'shop@example.test' ) && str_contains( $html, '+39 (081) 123-456' ), 'Full policy must show saved trader data' );
 check( substr_count( $html, 'href="mailto:shop@example.test"' ) === 3, 'Email must be linked in seller details, withdrawal instructions and model recipient' );
 check( substr_count( $html, 'href="tel:+39081123456"' ) === 2, 'Phone must be linked with normalized destination in seller details and model recipient' );

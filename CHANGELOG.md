@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.4 - 2026-10-23
+
+- Shortcode dell'informativa limitato a HTML essenziale: rimossi i marcatori dell'editor prima dell'output, senza eseguire il rendering dei blocchi WordPress né aggiungere classi o stili dei blocchi.
+- Box del modulo tipo con soli bordo, sfondo e spaziatura interna relativa al carattere; rimossi colore del testo, margini imposti, arrotondamenti e regole legate alla larghezza dello schermo. Paragrafi e tipografia ereditati dalla pagina.
+
 ## 1.5.3 - 2026-10-22
 
 - Modulo tipo di recesso racchiuso in un box distinto, con spiegazione della sua funzione alternativa alla procedura online e senza duplicare la richiesta già inviata.
