@@ -81,9 +81,9 @@ function do_shortcode( $content ) {
 	}, $content );
 }
 
-require __DIR__ . '/../includes/class-wlr-setup-wizard.php';
-require __DIR__ . '/../includes/class-wlr-annex-form.php';
-require __DIR__ . '/../includes/class-wlr-customer-account.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-setup-wizard.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-annex-form.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-customer-account.php';
 
 $wizard = WLR_Setup_Wizard::instance();
 check( isset( $shortcodes['wlr_precontractual_policy'] ), 'Policy shortcode must register on frontend' );

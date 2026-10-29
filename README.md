@@ -1,6 +1,8 @@
 # Woo Legal Returns - EU Directive
 
-Versione corrente: **1.5.4**
+Versione corrente: **1.5.6**
+
+Il flusso cliente mostra solo le informazioni e i consensi pertinenti all'acquisto. Per gli ordini di soli beni fisici non vengono mostrate caselle o diciture sui consensi per contenuti digitali e servizi. Le email distinguono la decorrenza in base ai prodotti dell'ordine; il modulo di recesso rimanda all'informativa per le condizioni complete.
 
 Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Diritti dei Consumatori (2011/83/UE come modificata dalla Direttiva 2023/2673)** e al D.Lgs. 209/2025 (art. 54-bis Codice del Consumo).
 
@@ -39,7 +41,7 @@ Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Dir
 
 ## Installazione
 
-1. Clona o copia la cartella `woo-legal` in `wp-content/plugins/`.
+1. Copia la sottocartella `woo-legal/` del repository in `wp-content/plugins/`, oppure installa lo ZIP generato in `dist/`. La radice del repository contiene gli strumenti di sviluppo e non va installata come plugin.
 2. Attiva il plugin da **Plugin > Plugin installati**.
 3. Completa il wizard da **WooCommerce > Configurazione Woo Legal Returns**.
 4. Gestisci richieste, export e impostazioni da **WooCommerce > Resi UE**.
@@ -48,40 +50,17 @@ Plugin WordPress/WooCommerce per adeguare il negozio alla **Direttiva UE sui Dir
 ## Struttura file
 
 ```text
-woo-legal/
-|-- woo-legal-returns.php               # Entry point plugin
-|-- includes/
-|   |-- class-wlr-post-type.php         # CPT, validazione, deadline e persistenza richieste
-|   |-- class-wlr-customer-account.php  # My Account, shortcode pubblici, AJAX e flusso ospiti
-|   |-- class-wlr-emails.php            # Notifiche email e link recesso nelle email WooCommerce
-|   |-- class-wlr-admin.php             # Dashboard, impostazioni, export CSV e bulk action
-|   |-- class-wlr-setup-wizard.php      # Wizard configurazione iniziale e pagina informativa
-|   |-- class-wlr-product-settings.php  # Regole prodotto/categoria e avvisi recesso
-|   |-- class-wlr-checkout-consent.php  # Consensi checkout per digitale/servizi
-|   |-- class-wlr-privacy.php           # Privacy policy, exporter ed eraser WordPress
-|   |-- class-wlr-annex-form.php        # Compatibilita shortcode legacy
-|   `-- class-wlr-github-updater.php    # Aggiornamenti automatici da GitHub
-|-- templates/
-|   |-- myaccount/
-|   |   |-- returns.php                 # Elenco resi cliente
-|   |   |-- return-request.php          # Form recesso UE
-|   |   `-- withdrawal-notice.php       # Avviso thank-you page
-|   |-- emails/
-|   |   |-- customer-return-received.php
-|   |   |-- customer-status-update.php
-|   |   `-- admin-new-request.php
-|   `-- admin/
-|       |-- list.php                    # Lista admin
-|       |-- detail.php                  # Dettaglio + azioni
-|       `-- guide.php                   # Pagina guida admin
-|-- assets/
-|   |-- css/wlr-frontend.css
-|   |-- css/wlr-admin.css
-|   |-- js/wlr-frontend.js
-|   `-- js/wlr-admin.js
-|-- composer.json                       # Tooling sviluppo
-|-- composer.lock
-|-- phpcs.xml.dist
+woo-legal/                            # Repository
+|-- woo-legal/                        # Solo file installabili del plugin
+|   |-- woo-legal-returns.php          # Entry point
+|   |-- includes/                     # Classi PHP
+|   |-- templates/                    # Template admin, account ed email
+|   `-- assets/                       # CSS e JavaScript
+|-- tests/                            # Test locali
+|-- tools/package.ps1                 # Generazione ZIP dalla sola sottocartella
+|-- dist/                             # Pacchetti installabili
+|-- composer.json                     # Tooling sviluppo
+|-- README.md
 `-- CHANGELOG.md
 ```
 
@@ -134,7 +113,7 @@ I template possono essere sovrascritti dal tema creando la cartella:
 wp-content/themes/[tema]/woo-legal-returns/
 ```
 
-e copiando i file da `templates/` mantenendo la stessa struttura.
+e copiando i file da `woo-legal/templates/` del repository mantenendo la stessa struttura.
 
 ## Conformita normativa
 
@@ -189,8 +168,16 @@ e copiando i file da `templates/` mantenendo la stessa struttura.
 ```text
 php tests/regression.php
 php tests/precontractual.php
-node --check assets/js/wlr-frontend.js
-node --check assets/js/wlr-admin.js
+php tests/checkout-consents.php
+php tests/updater-package.php
+node --check woo-legal/assets/js/wlr-frontend.js
+node --check woo-legal/assets/js/wlr-admin.js
+```
+
+Per generare il pacchetto installabile con i soli file del plugin:
+
+```powershell
+powershell -NoProfile -File tools/package.ps1
 ```
 
 Le prove locali usano dipendenze simulate e metodi reali del plugin, compreso l'endpoint AJAX di aggiornamento stato in processi separati. Non sostituiscono le verifiche WordPress/WooCommerce, browser, HPOS, invio email e concorrenza su un database reale.

@@ -10,6 +10,7 @@ defined( 'ABSPATH' ) || exit;
 class WLR_Checkout_Consent {
 
 	private static ?WLR_Checkout_Consent $instance = null;
+	private array $rendered_order_consents = array();
 
 	public static function instance(): self {
 		if ( null === self::$instance ) {
@@ -26,6 +27,10 @@ class WLR_Checkout_Consent {
 		add_action( 'woocommerce_init', array( $this, 'register_block_fields' ), 20 );
 		add_action( 'woocommerce_store_api_checkout_order_processed', array( $this, 'save_block_consents' ), 5 );
 		add_action( 'woocommerce_email_after_order_table', array( $this, 'render_email_consents' ), 20, 4 );
+		add_action( 'woocommerce_order_details_after_customer_details', array( $this, 'render_order_consents' ), 20 );
+		add_action( 'woocommerce_thankyou', array( $this, 'render_thankyou_consents' ), 20 );
+		add_filter( 'woocommerce_admin_shipping_fields', array( $this, 'filter_admin_consent_fields' ), 100, 3 );
+		add_filter( 'woocommerce_admin_billing_fields', array( $this, 'filter_admin_consent_fields' ), 100, 3 );
 		add_action( 'admin_notices', array( $this, 'compatibility_notice' ) );
 	}
 
@@ -192,12 +197,15 @@ class WLR_Checkout_Consent {
 			);
 			woocommerce_register_additional_checkout_field(
 				array(
-					'id'       => 'woo-legal/' . $type,
-					'label'    => wp_strip_all_tags( self::get_consent_text( $type ) ),
-					'location' => 'order',
-					'type'     => 'checkbox',
-					'required' => 'digital' === $type ? $schema( true ) : false,
-					'hidden'   => $schema( false ),
+					'id'                         => 'woo-legal/' . $type,
+					'label'                      => wp_strip_all_tags( self::get_consent_text( $type ) ),
+					'location'                   => 'order',
+					'type'                       => 'checkbox',
+					'required'                   => 'digital' === $type ? $schema( true ) : false,
+					'hidden'                     => $schema( false ),
+					// Core can format missing/hidden checkboxes as "No" after checkout.
+					// Render only the consent receipts actually recorded by this plugin.
+					'show_in_order_confirmation' => false,
 				)
 			);
 		}
@@ -237,6 +245,60 @@ class WLR_Checkout_Consent {
 			$text = ( 'yes' === $consent['accepted'] ? esc_html__( 'Consenso espresso: ', 'woo-legal-returns' ) : esc_html__( 'Consenso non prestato: ', 'woo-legal-returns' ) ) . $consent['text'] . ' — ' . $consent['timestamp'];
 			echo $plain_text ? "\n" . esc_html( $text ) . "\n" : '<p>' . esc_html( $text ) . '</p>';
 		}
+	}
+
+	/** Show recorded consents only, independently of the customer's current cart. */
+	public function render_order_consents( $order ): void {
+		if ( ! $order instanceof WC_Order || isset( $this->rendered_order_consents[ $order->get_id() ] ) ) {
+			return;
+		}
+		$consents = self::get_order_consents( $order );
+		if ( ! $consents ) {
+			return;
+		}
+		$this->rendered_order_consents[ $order->get_id() ] = true;
+		echo '<section class="wlr-order-consents"><h2>' . esc_html__( 'Consensi sul diritto di recesso', 'woo-legal-returns' ) . '</h2>';
+		foreach ( $consents as $consent ) {
+			$text = ( 'yes' === $consent['accepted'] ? __( 'Consenso espresso: ', 'woo-legal-returns' ) : __( 'Consenso non prestato: ', 'woo-legal-returns' ) ) . $consent['text'];
+			echo '<p>' . esc_html( $text ) . '</p>';
+		}
+		echo '</section>';
+	}
+
+	/** Blocks confirmations run the thankyou hook without the classic details table. */
+	public function render_thankyou_consents( $order_id ): void {
+		$this->render_order_consents( wc_get_order( $order_id ) );
+	}
+
+	/** Remove irrelevant core checkboxes from both the order summary and edit form. */
+	public function filter_admin_consent_fields( array $fields, $order = null, $context = 'edit' ): array {
+		unset( $context );
+		if ( ! $order instanceof WC_Order ) {
+			return $fields;
+		}
+		foreach ( array( 'digital' => 'digital_content', 'service' => 'early_service' ) as $type => $status ) {
+			// Preserve historical evidence even if the product was changed or deleted.
+			$relevant = '' !== (string) $order->get_meta( '_wlr_consent_' . $type . '_text' )
+				|| 'yes' === $order->get_meta( '_wlr_consent_' . $type . '_accepted' )
+				|| in_array( $order->get_meta( '_wc_other/woo-legal/' . $type ), array( '1', 1, true ), true );
+			if ( ! $relevant ) {
+				foreach ( $order->get_items() as $item ) {
+					if ( $item instanceof WC_Order_Item_Product && $status === WLR_Product_Settings::get_item_status( $item ) ) {
+						$relevant = true;
+						break;
+					}
+				}
+			}
+			if ( $relevant ) {
+				continue;
+			}
+			foreach ( $fields as $key => $field ) {
+				if ( '_wc_other/woo-legal/' . $type === ( $field['id'] ?? $key ) ) {
+					unset( $fields[ $key ] );
+				}
+			}
+		}
+		return $fields;
 	}
 
 	public function compatibility_notice(): void {

@@ -57,6 +57,9 @@ class WLR_Customer_Account {
 }
 
 function __( $text, ...$args ) { return $text; }
+function esc_html( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' ); }
+function esc_html__( $text, ...$args ) { return esc_html( $text ); }
+function esc_url( $text ) { return htmlspecialchars( (string) $text, ENT_QUOTES, 'UTF-8' ); }
 function is_wp_error( $value ) { return $value instanceof WP_Error; }
 function absint( $value ) { return abs( (int) $value ); }
 function sanitize_key( $value ) { return preg_replace( '/[^a-z0-9_-]/', '', strtolower( $value ) ); }
@@ -157,8 +160,8 @@ $write_mode = 'ok';
 $delete_mode = 'ok';
 $allowed = true;
 $inserts = 0;
-require __DIR__ . '/../includes/class-wlr-lock.php';
-require __DIR__ . '/../includes/class-wlr-post-type.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-lock.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-post-type.php';
 
 // Invoke the actual AJAX handler in isolated processes because JSON responses exit.
 if ( ( $argv[1] ?? '' ) === '--ajax' ) {
@@ -170,7 +173,7 @@ if ( ( $argv[1] ?? '' ) === '--ajax' ) {
 	if ( $case === 'denied' ) { $allowed = false; }
 	if ( $case === 'write' ) { $_POST['note'] = 'Termine scaduto'; $write_mode = 'fail'; }
 	if ( $case === 'unsaved' ) { $_POST['note'] = 'Termine scaduto'; $write_mode = 'ignore'; }
-	require __DIR__ . '/../includes/class-wlr-admin.php';
+	require __DIR__ . '/../woo-legal/includes/class-wlr-admin.php';
 	( new WLR_Admin() )->handle_update_status();
 	exit( 1 );
 }
@@ -289,10 +292,30 @@ $order->created = new DateTimeImmutable( 'today', wp_timezone() );
 $new_return = WLR_Post_Type::create_return( $payload );
 check( $new_return === 100 && $inserts === 1, 'Eligible request without reason must be persisted' );
 check( $meta[100]['_wlr_reason'] === '' && $meta[100]['_wlr_declaration']['reason_label'] === 'Non indicato (facoltativo)', 'Receipt snapshot stores readable optional reason' );
-require __DIR__ . '/../includes/class-wlr-emails.php';
+require __DIR__ . '/../woo-legal/includes/class-wlr-emails.php';
 $email_method = new ReflectionMethod( WLR_Emails::class, 'get_email_data' );
 if ( PHP_VERSION_ID < 80100 ) { $email_method->setAccessible( true ); }
 $emails = new WLR_Emails();
+$link_method = new ReflectionMethod( WLR_Emails::class, 'output_withdrawal_link' );
+if ( PHP_VERSION_ID < 80100 ) { $link_method->setAccessible( true ); }
+foreach ( array( false, true ) as $plain_text ) {
+	foreach ( array( array( 'goods' ), array( 'digital' ), array( 'service' ), array( 'goods', 'digital' ) ) as $types ) {
+		$email_order = new WC_Order();
+		$email_order->items = array();
+		foreach ( $types as $type ) { $item = new WC_Order_Item_Product(); $item->type = $type; $email_order->items[] = $item; }
+		ob_start();
+		$link_method->invoke( $emails, $email_order, $plain_text );
+		$link_html = ob_get_clean();
+		check( str_contains( $link_html, 'https://example.test/returns' ), 'Simplified email must preserve withdrawal link' );
+		if ( array( 'goods' ) === $types ) {
+			check( str_contains( $link_html, 'ricezione dei beni' ) && ! str_contains( $link_html, 'digitali' ) && ! str_contains( $link_html, 'servizi' ), 'Physical email must omit irrelevant digital/service references' );
+		} elseif ( count( $types ) === 1 ) {
+			check( str_contains( $link_html, 'conclusione del contratto' ) && ! str_contains( $link_html, 'ricezione dei beni' ), 'Nonphysical email must omit irrelevant goods references' );
+		} else {
+			check( str_contains( $link_html, 'ricezione dei beni' ) && str_contains( $link_html, 'conclusione del contratto' ), 'Mixed email must preserve both timing rules' );
+		}
+	}
+}
 check( $email_method->invoke( $emails, 100 )['reason_label'] === 'Non indicato (facoltativo)', 'New emails render optional reason label' );
 $meta[100]['_wlr_declaration']['reason_label'] = '';
 $hash_before = WLR_Post_Type::compute_receipt_hash( 100 );

@@ -151,17 +151,21 @@ class WLR_GitHub_Updater {
 
 		$corrected = trailingslashit( $remote_source ) . $this->plugin_slug . '/';
 
-		if ( $source === $corrected ) {
-			return $source;
-		}
-
 		global $wp_filesystem;
 
 		if ( ! $wp_filesystem ) {
 			return new WP_Error( 'wlr_filesystem_unavailable', __( 'Filesystem non disponibile: impossibile verificare la cartella del plugin.', 'woo-legal-returns' ) );
 		}
+		// Repository archives contain development files alongside the installable plugin.
+		$nested = trailingslashit( $source ) . $this->plugin_slug . '/';
+		if ( $wp_filesystem->exists( $nested . 'woo-legal-returns.php' ) ) {
+			return $nested;
+		}
 		if ( ! $wp_filesystem->exists( trailingslashit( $source ) . 'woo-legal-returns.php' ) ) {
 			return new WP_Error( 'wlr_invalid_package', __( 'Il pacchetto non contiene il file principale di Woo Legal Returns.', 'woo-legal-returns' ) );
+		}
+		if ( $source === $corrected ) {
+			return $source;
 		}
 
 		if ( $wp_filesystem->move( $source, $corrected ) ) {

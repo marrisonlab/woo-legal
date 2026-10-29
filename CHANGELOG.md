@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.6 - 2026-10-29
+
+- File installabili spostati nella sottocartella `woo-legal/`; test, documentazione, strumenti e pacchetti restano nella radice del repository.
+- Aggiornati i percorsi dei test e aggiunto lo script di packaging della sola cartella plugin.
+- Updater GitHub compatibile con gli archivi del repository che contengono la sottocartella plugin, senza installare test e strumenti di sviluppo; mantenuto il supporto agli ZIP con il plugin direttamente nella cartella principale.
+
+## 1.5.5 - 2026-10-29
+
+- Eliminati i riepiloghi automatici dei consensi Blocks che potevano mostrare “No” anche per campi nascosti o non pertinenti. Conferma ordine, area cliente ed email usano le sole prove di consenso registrate dal plugin, senza duplicazioni.
+- Rimossi i campi consenso non pertinenti dal riepilogo e dalla modifica degli ordini amministrativi, anche storici; conservati dati e consensi effettivi, con verifica dei prodotti dell'ordine indipendente dal carrello corrente.
+- Email degli ordini fisici senza riferimenti a servizi e contenuti digitali; testo introduttivo del modulo di recesso semplificato, con rinvio all'informativa per decorrenza e condizioni.
+
 ## 1.5.4 - 2026-10-23
 
 - Shortcode dell'informativa limitato a HTML essenziale: rimossi i marcatori dell'editor prima dell'output, senza eseguire il rendering dei blocchi WordPress né aggiungere classi o stili dei blocchi.

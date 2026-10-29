@@ -215,10 +215,27 @@ class WLR_Emails {
 	 */
 	private function output_withdrawal_link( \WC_Order $order, bool $plain_text = false ): void {
 		$return_url = WLR_Customer_Account::get_order_return_url( $order );
+		$has_goods  = false;
+		$has_other  = false;
+		foreach ( $order->get_items() as $item ) {
+			if ( $item instanceof WC_Order_Item_Product ) {
+				if ( 'goods' === WLR_Product_Settings::get_item_contract_type( $item ) ) {
+					$has_goods = true;
+				} else {
+					$has_other = true;
+				}
+			}
+		}
+		$timing = __( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali.', 'woo-legal-returns' );
+		if ( $has_goods && ! $has_other ) {
+			$timing = __( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni.', 'woo-legal-returns' );
+		} elseif ( $has_other && ! $has_goods ) {
+			$timing = __( 'Il termine ordinario è di 14 giorni dalla conclusione del contratto.', 'woo-legal-returns' );
+		}
 
 		if ( $plain_text ) {
 			echo "\n" . esc_html__( 'Diritto di recesso:', 'woo-legal-returns' ) . ' ';
-			echo esc_html__( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali.', 'woo-legal-returns' ) . "\n";
+			echo esc_html( $timing ) . "\n";
 			echo esc_url( $return_url ) . "\n";
 			return;
 		}
@@ -227,7 +244,7 @@ class WLR_Emails {
 			'<p style="margin-top:20px;padding:12px 15px;background:#f8f8f8;border-left:4px solid #96588a;font-size:13px;">' .
 			'<strong>%s</strong> %s <a href="%s" style="color:#96588a;">%s</a></p>',
 			esc_html__( 'Diritto di recesso:', 'woo-legal-returns' ),
-			esc_html__( 'Il termine ordinario è di 14 giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali.', 'woo-legal-returns' ),
+			esc_html( $timing ),
 			esc_url( $return_url ),
 			esc_html__( 'Recedere dal contratto qui', 'woo-legal-returns' )
 		);

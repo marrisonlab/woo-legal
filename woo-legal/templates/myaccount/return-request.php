@@ -29,7 +29,7 @@ $order_page = max( 1, absint( wp_unslash( $_GET['wlr_orders_page'] ?? 1 ) ) );
 		</a>
 	</p>
 
-	<h3><?php esc_html_e( 'Modulo di Recesso – Direttiva UE Diritti dei Consumatori', 'woo-legal-returns' ); ?></h3>
+	<h3><?php esc_html_e( 'Richiesta di recesso', 'woo-legal-returns' ); ?></h3>
 	<noscript><p><?php esc_html_e( 'La funzione digitale richiede JavaScript. Puoi usare il modulo tipo stampabile o inviare una dichiarazione al venditore tramite i contatti indicati nell’informativa sul recesso.', 'woo-legal-returns' ); ?></p></noscript>
 	<?php if ( $order_pages > 1 && ! $is_guest ) : ?>
 	<nav aria-label="<?php esc_attr_e( 'Pagine degli ordini', 'woo-legal-returns' ); ?>">
@@ -70,13 +70,11 @@ $order_page = max( 1, absint( wp_unslash( $_GET['wlr_orders_page'] ?? 1 ) ) );
 
 	<div class="wlr-legal-notice">
 		<p>
-			<strong><?php esc_html_e( 'INFORMAZIONI SUL DIRITTO DI RECESSO', 'woo-legal-returns' ); ?></strong><br>
 			<?php
 			printf(
-				/* translators: 1: giorni 2: blog name */
-				esc_html__( 'Puoi esercitare il diritto di recesso senza fornire una giustificazione. Il termine ordinario è di %1$d giorni dalla ricezione dei beni o dalla conclusione del contratto per servizi e contenuti digitali, salvo le eccezioni previste dalla normativa. Dopo la conferma finale registriamo la dichiarazione e inviamo una ricevuta via email.', 'woo-legal-returns' ),
-				(int) WLR_RETURN_DAYS,
-				'<strong>' . esc_html( get_bloginfo( 'name' ) ) . '</strong>'
+				/* translators: %d: giorni */
+				esc_html__( 'Puoi esercitare il diritto di recesso senza fornire una giustificazione. Il termine ordinario è di %d giorni, con decorrenza e condizioni indicate nell’informativa sul recesso. Dopo la conferma finale registriamo la dichiarazione e inviamo una ricevuta via email.', 'woo-legal-returns' ),
+				(int) WLR_RETURN_DAYS
 			);
 			?>
 		</p>

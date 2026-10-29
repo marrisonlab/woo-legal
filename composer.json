@@ -18,6 +18,6 @@
   "scripts": {
     "phpcs": "phpcs --standard=phpcs.xml.dist",
     "phpcbf": "phpcbf --standard=phpcs.xml.dist",
-    "test": ["php tests/regression.php", "php tests/precontractual.php"]
+    "test": ["php tests/regression.php", "php tests/precontractual.php", "php tests/checkout-consents.php", "php tests/updater-package.php"]
   }
 }
